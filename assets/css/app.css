@@ -51,7 +51,6 @@ body{
   font-family:var(--body);font-size:14px;line-height:1.5;
   -webkit-font-smoothing:antialiased;
   -webkit-text-size-adjust:100%;text-size-adjust:100%;
-  overflow-x:hidden;
 }
 h1,h2,h3,h4{font-family:var(--display);margin:0;letter-spacing:-.02em;line-height:1.15}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -136,6 +135,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .rail{
   background:var(--rail);color:var(--rail-ink);
   display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+  min-width:0;
 }
 .rail-brand{
   display:flex;align-items:center;gap:8px;padding:20px 20px 16px;
@@ -156,7 +156,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   background:var(--rail-2);border-color:var(--rail-3);color:var(--rail-ink);font-size:13px;
 }
 
-.rail-nav{padding:12px 10px;flex:1;overflow:auto}
+.rail-nav{padding:12px 10px;flex:1;overflow:auto;min-width:0}
 .nav-item{
   display:flex;align-items:center;gap:10px;width:100%;text-align:left;
   padding:9px 10px;margin-bottom:2px;border:0;border-radius:var(--r);
@@ -203,6 +203,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .card{
   background:var(--card);border:1px solid var(--line);border-radius:6px;
   box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden;
+  min-width:0;max-width:100%;
 }
 .card-head{
   display:flex;align-items:center;justify-content:space-between;gap:14px;
@@ -295,7 +296,7 @@ table.tbl.freeze-2 tbody tr:hover td:nth-child(2){background:#FAFBFD}
 }
 
 /* ---------- statistik ---------- */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:var(--line-soft)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line-soft);min-width:0}
 .stat{background:var(--card);padding:16px 18px}
 .stat span{
   display:block;font-family:var(--display);font-size:10px;font-weight:600;
@@ -305,7 +306,7 @@ table.tbl.freeze-2 tbody tr:hover td:nth-child(2){background:#FAFBFD}
 .stat small{display:block;color:var(--mute);font-size:11.5px;margin-top:4px}
 
 /* ---------- tabel ---------- */
-.tbl-scroll{overflow-x:auto}
+.tbl-scroll{overflow-x:auto;min-width:0;max-width:100%;-webkit-overflow-scrolling:touch}
 table.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
 table.tbl th{
   font-family:var(--display);font-size:10px;font-weight:600;letter-spacing:.1em;
@@ -387,10 +388,10 @@ table.tbl tfoot td.lbl{font-family:var(--display);letter-spacing:.08em;text-tran
    Baris atas berisi merek di kiri dan akun di kanan. Host dan periode
    disembunyikan sampai baris merek ditekan. */
 @media (max-width:900px){
-  .shell{grid-template-columns:minmax(0,1fr)}
+  .shell{display:block}
 
   .rail{
-    position:sticky;top:0;height:auto;z-index:30;
+    position:sticky;top:0;height:auto;z-index:30;max-width:100%;
     border-bottom:1px solid var(--rail-3);
     display:grid;grid-template-columns:auto minmax(0,1fr);
     grid-template-areas:
@@ -421,6 +422,7 @@ table.tbl tfoot td.lbl{font-family:var(--display);letter-spacing:.08em;text-tran
     grid-area:nav;display:flex;gap:4px;overflow-x:auto;
     padding:2px 12px 10px;-webkit-overflow-scrolling:touch;
     border-top:1px solid var(--rail-3);padding-top:8px;
+    min-width:0;max-width:100%;
   }
   .rail-nav::-webkit-scrollbar{display:none}
   .nav-item{white-space:nowrap;width:auto;flex:0 0 auto;margin-bottom:0;padding:8px 12px}
@@ -436,7 +438,7 @@ table.tbl tfoot td.lbl{font-family:var(--display);letter-spacing:.08em;text-tran
 
   /* Tombol aksi turun ke bawah layar. */
   .work{
-    padding:18px 14px 56px;
+    padding:18px 14px 56px;max-width:100%;
     grid-template-columns:minmax(0,1fr);
     grid-template-areas:"head" "views" "actions";
   }
