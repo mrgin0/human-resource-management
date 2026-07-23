@@ -32,7 +32,7 @@ const salesSim = () => C.salesSimOf(st.settings) || { id: '', label: 'Simulasi' 
   await initFirebase();
 
   $('#gateNote').textContent = IS_CONFIGURED
-    ? ''
+    ? 'Akun pertama yang terdaftar perlu dijadikan admin lewat Firebase Console atau daftar BOOTSTRAP_ADMIN_EMAILS di config.js.'
     : 'Firebase belum diisi di assets/js/config.js. Aplikasi berjalan dalam mode demo: kamu bisa mencoba semua fitur, tapi data hilang saat halaman dimuat ulang.';
 
   if (!IS_CONFIGURED) {
@@ -141,8 +141,25 @@ function fillHostPicker() {
   if (label) label.textContent = `Host (${st.hosts.length} team)`;
 }
 
-$('#hostPick').addEventListener('change', e => { st.hostId = e.target.value; render(); });
-$('#periodPick').addEventListener('change', e => { st.period = e.target.value; render(); });
+// Di layar kecil, baris merek berfungsi sebagai tombol buka-tutup
+// untuk pilihan host dan periode.
+$('#railToggle').addEventListener('click', () => {
+  const rail = $('.rail');
+  const open = rail.classList.toggle('is-open');
+  $('#railToggle').setAttribute('aria-expanded', String(open));
+});
+
+$('#hostPick').addEventListener('change', e => {
+  st.hostId = e.target.value; closeRail(); render();
+});
+$('#periodPick').addEventListener('change', e => {
+  st.period = e.target.value; closeRail(); render();
+});
+
+function closeRail() {
+  $('.rail').classList.remove('is-open');
+  $('#railToggle').setAttribute('aria-expanded', 'false');
+}
 
 $('#nav').addEventListener('click', e => {
   const b = e.target.closest('.nav-item');
@@ -897,7 +914,9 @@ function viewSetting(box) {
     </div>
 
     ${S.isLive() ? `<div class="card">
-      <div class="card-head"><h3>Pengguna</h3><p class="sub">Perubahan peran langsung tersimpan.</p></div>
+      <div class="card-head"><div><h3>Pengguna</h3>
+        <p class="sub">Perubahan peran langsung tersimpan. Menghapus di sini mencabut akses aplikasi,
+        bukan menghapus akun login di Firebase Authentication.</p></div></div>
       <div class="card-body" id="userList"></div>
     </div>` : ''}`;
 
@@ -1084,20 +1103,52 @@ function viewSetting(box) {
 
   function renderUsers() {
     const wrap = $('#userList'); if (!wrap) return;
-    wrap.innerHTML = st.users.length ? st.users.map(u => `
-      <div class="band-row" style="grid-template-columns:2fr 1.5fr 1fr auto">
-        <span style="font-size:13px">${escapeHtml(u.email || '')}</span>
+    wrap.innerHTML = st.users.length ? st.users.map(u => {
+      const self = u.id === st.user.uid;
+      return `<div class="band-row" style="grid-template-columns:2fr 1.5fr 1fr auto">
+        <span style="font-size:13px">${escapeHtml(u.email || '')}${self ? ' <span class="pill ok">Anda</span>' : ''}</span>
         <span style="font-size:13px;color:var(--mute)">${escapeHtml(u.name || '')}</span>
-        <select data-role="${u.id}">
+        <select data-role="${u.id}"${self ? ' disabled' : ''}>
           <option value="viewer"${u.role === 'viewer' ? ' selected' : ''}>Hanya lihat</option>
           <option value="admin"${u.role === 'admin' ? ' selected' : ''}>Admin</option>
-        </select><span></span>
-      </div>`).join('') : '<p style="color:var(--mute);font-size:13px;margin:0">Belum ada pengguna lain yang terdaftar.</p>';
+        </select>
+        ${self
+          ? '<span></span>'
+          : `<button class="btn btn-sm btn-danger" data-user-del="${u.id}" data-user-email="${escapeHtml(u.email || '')}">Hapus</button>`}
+      </div>`;
+    }).join('') : '<p style="color:var(--mute);font-size:13px;margin:0">Belum ada pengguna lain yang terdaftar.</p>';
 
     wrap.addEventListener('change', async e => {
       if (!e.target.dataset.role) return;
       await S.setUserRole(e.target.dataset.role, e.target.value);
+      const u = st.users.find(x => x.id === e.target.dataset.role);
+      if (u) u.role = e.target.value;
       toast('Peran pengguna diperbarui');
+    });
+
+    wrap.addEventListener('click', async e => {
+      const id = e.target.dataset.userDel;
+      if (!id) return;
+      const email = e.target.dataset.userEmail || 'pengguna ini';
+      if (!confirm(
+        `Hapus akses ${email}?\n\n` +
+        'Profil dan perannya dihapus dari aplikasi. Akun loginnya di Firebase Authentication ' +
+        'TIDAK ikut terhapus, jadi orang ini masih bisa masuk dan akan terdaftar ulang sebagai ' +
+        '"hanya lihat". Untuk memblokir sepenuhnya, nonaktifkan atau hapus akunnya di ' +
+        'Firebase Console > Authentication > Users.'
+      )) return;
+
+      try {
+        await S.remove('users', id);
+        st.users = st.users.filter(x => x.id !== id);
+        e.target.closest('.band-row')?.remove();
+        if (!st.users.length) {
+          wrap.innerHTML = '<p style="color:var(--mute);font-size:13px;margin:0">Belum ada pengguna lain yang terdaftar.</p>';
+        }
+        toast('Akses pengguna dihapus');
+      } catch (err) {
+        toast('Gagal menghapus: ' + (err.message || err));
+      }
     });
   }
 }
