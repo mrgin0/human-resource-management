@@ -110,9 +110,11 @@ async function loadAll() {
 
   st.hosts = await S.listAll('hosts');
   if (!st.hosts.length) {
-    const id = await S.create('hosts', { name: 'Host 1', jabatan: 'Host Live', active: true });
-    st.hosts = [{ id, name: 'Host 1', jabatan: 'Host Live', active: true }];
+    const rec = { name: 'Host 1', jabatan: 'Host Live', active: true, createdAt: Date.now() };
+    const id = await S.create('hosts', rec);
+    st.hosts = [{ id, ...rec }];
   }
+  sortHosts();
   if (!st.hostId || !st.hosts.some(h => h.id === st.hostId)) st.hostId = st.hosts[0].id;
 
   st.daily = await S.listAll('daily');
@@ -120,6 +122,13 @@ async function loadAll() {
   if (S.isLive() && isAdmin()) st.users = await S.listAll('users');
 
   fillHostPicker();
+}
+
+// Urutkan host dari yang paling lama terdaftar.
+// Host lama yang belum punya createdAt dianggap paling tua dan tetap di urutan
+// aslinya, karena Array.prototype.sort di JavaScript bersifat stabil.
+function sortHosts() {
+  st.hosts.sort((a, b) => C.num(a.createdAt) - C.num(b.createdAt));
 }
 
 function fillHostPicker() {
@@ -226,6 +235,7 @@ function viewDashboard(box) {
   $('#headActions').onclick = e => { if (e.target.dataset.act === 'print') window.print(); };
 
   box.innerHTML = `
+    ${hostTabs()}
     ${meterCard(per, gap)}
 
     <div class="card"><div class="stats">
@@ -267,6 +277,37 @@ function viewDashboard(box) {
         : `<div class="empty"><b>Belum ada surat</b>Catatan disiplin masih bersih.</div>`}
       </div>
     </div>`;
+
+  box.addEventListener('click', e => {
+    const tab = e.target.closest('.host-tab');
+    if (!tab) return;
+    st.hostId = tab.dataset.host;
+    fillHostPicker();
+    render();
+  });
+}
+
+// Deretan tab nama host di atas ringkasan, urut dari yang paling lama terdaftar.
+function hostTabs() {
+  return `<div class="card">
+    <div class="card-head">
+      <div><h3>Jumlah team = ${st.hosts.length}</h3>
+      <p class="sub">Pilih host untuk melihat ringkasannya</p></div>
+    </div>
+    <div class="host-tabs">
+      ${st.hosts.map(h => {
+        const per = C.computePeriod(
+          st.daily.filter(r => r.hostId === h.id && (r.date || '').slice(0, 7) === st.period),
+          st.settings
+        );
+        const aktif = h.id === st.hostId;
+        return `<button class="host-tab${aktif ? ' is-active' : ''}" data-host="${h.id}">
+          <strong>${escapeHtml(h.name)}</strong>
+          <span>KPI ${per.kpi.toFixed(1)} · ${per.totals.hari} hari</span>
+        </button>`;
+      }).join('')}
+    </div>
+  </div>`;
 }
 
 function meterCard(per, gap) {
@@ -523,6 +564,7 @@ function viewKpi(box) {
         <div class="card-body">
           <p style="margin-top:0;font-size:13px;color:var(--ink-2)">
             Poin sales dibaca langsung dari akumulasi <b>${escapeHtml(sim.label)}</b> satu bulan,
+            dicocokkan ke tabel skor sales di Setting. Tidak lagi memakai persentase.
           </p>
           <div class="tbl-scroll"><table class="tbl">
             <tbody>
@@ -904,9 +946,10 @@ function viewSetting(box) {
     if (t.id === 'addHost') {
       const name = prompt('Nama host baru:');
       if (name) {
-        const id = await S.create('hosts', { name, jabatan: 'Host Live', active: true });
-        st.hosts.push({ id, name, jabatan: 'Host Live', active: true });
-        fillHostPicker(); render(); toast('Host ditambahkan');
+        const rec = { name, jabatan: 'Host Live', active: true, createdAt: Date.now() };
+        const id = await S.create('hosts', rec);
+        st.hosts.push({ id, ...rec });
+        sortHosts(); fillHostPicker(); render(); toast('Host ditambahkan');
       }
     }
     if (t.dataset.hostDel) {
@@ -952,7 +995,7 @@ function viewSetting(box) {
   function renderHosts() {
     $('#hostList').innerHTML = st.hosts.map(h => `
       <div class="band-row">
-        <input value="${escapeHtml(h.name)}" data-host="${h.id}|name">
+        <input value="${escapeHtml(h.name)}" data-host="${h.id}|name" placeholder="Nama host">
         <input value="${escapeHtml(h.jabatan || '')}" data-host="${h.id}|jabatan" placeholder="Jabatan">
         <span style="font-size:12px;color:var(--mute)">${hostRowsOf(h.id)} catatan harian</span>
         <button class="btn btn-sm btn-danger" data-host-del="${h.id}">Hapus</button>
@@ -974,19 +1017,19 @@ function viewSetting(box) {
       </div>
       ${st.settings.simulations.map((x, i) => `
         <div class="band-row" style="grid-template-columns:2fr 1fr 1.2fr 1fr 1fr auto">
-          <input value="${escapeHtml(x.label)}" data-sim="${i}|label">
-          <input type="number" value="${x.cancelPct}" data-sim="${i}|cancelPct">
+          <input value="${escapeHtml(x.label)}" data-sim="${i}|label" placeholder="Judul kolom">
+          <input type="number" value="${x.cancelPct}" data-sim="${i}|cancelPct" placeholder="Cancel (%)">
           <select data-sim="${i}|basis">
-            <option value="profit"${x.basis === 'profit' ? ' selected' : ''}>Profit bersih</option>
-            <option value="komisi"${x.basis === 'komisi' ? ' selected' : ''}>Komisi</option>
+            <option value="profit"${x.basis === 'profit' ? ' selected' : ''}>Basis: profit bersih</option>
+            <option value="komisi"${x.basis === 'komisi' ? ' selected' : ''}>Basis: komisi</option>
           </select>
           <select data-sim="${i}|deductGaji">
-            <option value="no"${!x.deductGaji ? ' selected' : ''}>Tidak</option>
-            <option value="yes"${x.deductGaji ? ' selected' : ''}>Ya</option>
+            <option value="no"${!x.deductGaji ? ' selected' : ''}>Tanpa potong gaji+bonus</option>
+            <option value="yes"${x.deductGaji ? ' selected' : ''}>Potong gaji+bonus</option>
           </select>
           <select data-sim="${i}|isSalesBase">
-            <option value="no"${!x.isSalesBase ? ' selected' : ''}>Bukan</option>
-            <option value="yes"${x.isSalesBase ? ' selected' : ''}>Ya</option>
+            <option value="no"${!x.isSalesBase ? ' selected' : ''}>Bukan dasar sales</option>
+            <option value="yes"${x.isSalesBase ? ' selected' : ''}>Dasar penilaian sales</option>
           </select>
           <button class="btn btn-sm btn-danger" data-sim-del="${i}">Hapus</button>
         </div>`).join('')}`;
@@ -1016,11 +1059,11 @@ function viewSetting(box) {
       </div>
       ${st.settings.kpiColorBands.map((c, i) => `
         <div class="band-row" style="grid-template-columns:1fr 1fr 2fr 1.2fr auto">
-          <input type="number" value="${c.min}" data-col="${i}|min">
+          <input type="number" value="${c.min}" data-col="${i}|min" placeholder="KPI minimum">
           <select data-col="${i}|key">
-            ${['hijau', 'kuning', 'pink', 'merah'].map(k => `<option${k === c.key ? ' selected' : ''}>${k}</option>`).join('')}
+            ${['hijau', 'kuning', 'pink', 'merah'].map(k => `<option value="${k}"${k === c.key ? ' selected' : ''}>Warna ${k}</option>`).join('')}
           </select>
-          <input value="${escapeHtml(c.label)}" data-col="${i}|label">
+          <input value="${escapeHtml(c.label)}" data-col="${i}|label" placeholder="Label tampil">
           <select data-col="${i}|action">
             <option value="none"${c.action === 'none' ? ' selected' : ''}>Tidak ada surat</option>
             <option value="ST"${c.action === 'ST' ? ' selected' : ''}>Surat teguran</option>
@@ -1074,8 +1117,8 @@ function listCard(key, title, sub, field, fieldLabel) {
     <div class="card-body">
       <div class="band-head" style="grid-template-columns:2fr 1fr auto"><span>Nama</span><span>${fieldLabel}</span><span></span></div>
       ${items.map((x, i) => `<div class="band-row" style="grid-template-columns:2fr 1fr auto">
-        <input value="${escapeHtml(x.label)}" data-band="${key}|${i}|label">
-        <input type="number" value="${C.num(x[field])}" data-band="${key}|${i}|${field}">
+        <input value="${escapeHtml(x.label)}" data-band="${key}|${i}|label" placeholder="Nama">
+        <input type="number" value="${C.num(x[field])}" data-band="${key}|${i}|${field}" placeholder="${fieldLabel}">
         <button class="btn btn-sm btn-danger" data-item-del="${key}|${i}">Hapus</button>
       </div>`).join('')}
     </div></div>`;
@@ -1089,9 +1132,9 @@ function bandBlock(key, title, minLabel) {
     </div>
     <div class="band-head"><span>${minLabel}</span><span>Poin</span><span>Keterangan</span><span></span></div>
     ${st.settings[key].map((b, i) => `<div class="band-row">
-      <input type="number" value="${b.min}" data-band="${key}|${i}|min">
-      <input type="number" value="${b.poin}" data-band="${key}|${i}|poin">
-      <input value="${escapeHtml(b.label || '')}" data-band="${key}|${i}|label">
+      <input type="number" value="${b.min}" data-band="${key}|${i}|min" placeholder="${minLabel}">
+      <input type="number" value="${b.poin}" data-band="${key}|${i}|poin" placeholder="Poin">
+      <input value="${escapeHtml(b.label || '')}" data-band="${key}|${i}|label" placeholder="Keterangan">
       <button class="btn btn-sm btn-danger" data-band-del="${key}|${i}">×</button>
     </div>`).join('')}
   </div>`;
