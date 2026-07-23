@@ -1,0 +1,61 @@
+rules_version = '2';
+
+// Tempel isi file ini di Firebase Console > Firestore Database > Rules > Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Profil pengguna: siapa pun yang login boleh membaca daftar,
+    // tapi hanya admin yang boleh mengubah peran orang lain.
+    match /users/{uid} {
+      allow read: if signedIn();
+
+      // TAHAP AWAL — dipakai saat kamu belum punya admin sama sekali.
+      allow create: if signedIn() && request.auth.uid == uid;
+
+      // SETELAH ADMIN PERTAMA ADA, ganti baris create di atas dengan baris ini
+      // supaya tidak ada yang bisa mengangkat dirinya sendiri jadi admin:
+      // allow create: if signedIn() && request.auth.uid == uid
+      //   && request.resource.data.role == 'viewer';
+
+      allow update: if isAdmin()
+        || (request.auth.uid == uid && request.resource.data.role == resource.data.role);
+      allow delete: if isAdmin();
+    }
+
+    // Pengaturan aplikasi: semua boleh baca, hanya admin boleh ubah.
+    match /settings/{doc} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /hosts/{doc} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /daily/{doc} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /letters/{doc} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Tutup selain koleksi di atas.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

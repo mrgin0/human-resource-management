@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel KPI Host Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+
+<!-- ============ LAYAR MASUK ============ -->
+<div id="gate" class="gate">
+  <div class="gate-card">
+    <div class="onair" aria-hidden="true"><span class="dot"></span>ON AIR</div>
+    <h1>Panel KPI Host Live</h1>
+    <p class="gate-sub">Catat performa live harian, hitung KPI otomatis, terbitkan surat teguran dan surat peringatan.</p>
+
+    <form id="loginForm" autocomplete="on">
+      <label class="fld"><span>Email</span><input type="email" id="loginEmail" required placeholder="nama@perusahaan.com"></label>
+      <label class="fld"><span>Kata sandi</span><input type="password" id="loginPass" required minlength="6" placeholder="minimal 6 karakter"></label>
+      <div class="gate-actions">
+        <button type="submit" class="btn btn-primary" id="btnLogin">Masuk</button>
+        <button type="button" class="btn btn-ghost" id="btnRegister">Daftar akun baru</button>
+      </div>
+      <p class="gate-msg" id="gateMsg" role="status"></p>
+    </form>
+
+    <p class="gate-note" id="gateNote"></p>
+  </div>
+</div>
+
+<!-- ============ APLIKASI ============ -->
+<div id="shell" class="shell" hidden>
+
+  <aside class="rail">
+    <div class="rail-brand">
+      <span class="rail-mark">KPI</span>
+      <span class="rail-name">Host Live</span>
+    </div>
+
+    <div class="rail-picker">
+      <label class="fld tight"><span>Host</span>
+        <select id="hostPick"></select>
+      </label>
+      <label class="fld tight"><span>Periode</span>
+        <input type="month" id="periodPick">
+      </label>
+    </div>
+
+    <nav class="rail-nav" id="nav">
+      <button class="nav-item is-active" data-view="dashboard"><em>01</em>Ringkasan</button>
+      <button class="nav-item" data-view="harian"><em>02</em>Data harian</button>
+      <button class="nav-item" data-view="kpi"><em>03</em>Penilaian KPI</button>
+      <button class="nav-item" data-view="surat"><em>04</em>Surat ST &amp; SP</button>
+      <button class="nav-item" data-view="riwayat"><em>05</em>Riwayat bulanan</button>
+      <button class="nav-item" data-view="setting" data-admin><em>06</em>Setting</button>
+    </nav>
+
+    <div class="rail-foot">
+      <div class="who"><strong id="whoName">—</strong><span id="whoRole" class="tag">—</span></div>
+      <button class="btn btn-quiet" id="btnLogout">Keluar</button>
+    </div>
+  </aside>
+
+  <main class="work">
+    <header class="work-head">
+      <div>
+        <p class="eyebrow" id="ctxLine">—</p>
+        <h2 id="viewTitle">Ringkasan</h2>
+      </div>
+      <div class="head-actions" id="headActions"></div>
+    </header>
+
+    <div id="views">
+      <section class="view is-active" data-view="dashboard"></section>
+      <section class="view" data-view="harian"></section>
+      <section class="view" data-view="kpi"></section>
+      <section class="view" data-view="surat"></section>
+      <section class="view" data-view="riwayat"></section>
+      <section class="view" data-view="setting"></section>
+    </div>
+  </main>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div id="modal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <header class="modal-head">
+      <h3 id="modalTitle">Judul</h3>
+      <button class="btn btn-quiet" id="modalClose" aria-label="Tutup">Tutup</button>
+    </header>
+    <div class="modal-body" id="modalBody"></div>
+    <footer class="modal-foot" id="modalFoot"></footer>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
