@@ -17,7 +17,9 @@ const st = {
   users: [],
   hostId: null,
   period: new Date().toISOString().slice(0, 7),
-  view: 'dashboard'
+  view: 'dashboard',
+  // Jumlah baris yang ditampilkan tiap tabel: '7', '30', atau 'all'.
+  limits: { harian: '30', kpi: '30', surat: '30', riwayat: '30' }
 };
 
 const $ = s => document.querySelector(s);
@@ -239,6 +241,46 @@ function render() {
 }
 
 // ============================================================
+//  PEMBATAS JUMLAH BARIS
+// ============================================================
+const LIMIT_OPTS = [['7', '7 baris'], ['30', '30 baris'], ['all', 'Semua baris']];
+
+function limitCtl(key) {
+  return `<label class="rowlimit"><span>Tampilkan</span>
+    <select data-limit="${key}">
+      ${LIMIT_OPTS.map(([v, t]) =>
+        `<option value="${v}"${st.limits[key] === v ? ' selected' : ''}>${t}</option>`).join('')}
+    </select></label>`;
+}
+
+// Tabel urut lama ke baru: ambil baris terakhir (yang terbaru).
+function tail(list, key) {
+  const n = st.limits[key];
+  return n === 'all' ? list : list.slice(-Number(n));
+}
+
+// Tabel urut baru ke lama: ambil baris teratas.
+function head(list, key) {
+  const n = st.limits[key];
+  return n === 'all' ? list : list.slice(0, Number(n));
+}
+
+function limitNote(shown, total, tentangTotal = false) {
+  if (shown >= total) return `${total} baris`;
+  return `Menampilkan ${shown} baris terbaru dari ${total}` +
+    (tentangTotal ? '. Baris total tetap dihitung dari seluruh data bulan ini.' : '.');
+}
+
+function wireLimit(box) {
+  box.addEventListener('change', e => {
+    const k = e.target.dataset.limit;
+    if (!k) return;
+    st.limits[k] = e.target.value;
+    render();
+  });
+}
+
+// ============================================================
 //  01 — RINGKASAN
 // ============================================================
 function viewDashboard(box) {
@@ -308,7 +350,7 @@ function viewDashboard(box) {
 function hostTabs() {
   return `<div class="card">
     <div class="card-head">
-      <div><h3>Jumlah team = ${st.hosts.length}</h3>
+      <div><h3>Jumlah Team = ${st.hosts.length}</h3>
       <p class="sub">Pilih host untuk melihat ringkasannya</p></div>
     </div>
     <div class="host-tabs">
@@ -382,7 +424,7 @@ function viewHarian(box) {
     $('#addRow').onclick = () => rowForm(null);
   }
 
-  const head = `
+  const thead = `
     <tr>
       <th class="num">No</th><th>Tanggal</th><th class="num">Live/jam</th>
       <th class="num">Tarif/jam</th><th class="num">Komisi</th><th class="num">Gaji</th><th class="num">Bonus</th>
@@ -391,9 +433,12 @@ function viewHarian(box) {
       <th></th>
     </tr>`;
 
-  const body = per.rows.map((r, i) => `
+  const indexed = per.rows.map((r, i) => ({ r, no: i + 1 }));
+  const shown = tail(indexed, 'harian');
+
+  const body = shown.map(({ r, no }) => `
     <tr>
-      <td class="num">${i + 1}</td>
+      <td class="num">${no}</td>
       <td>${r.date}${r.banned ? ' <span class="pill sp">Banned</span>' : ''}</td>
       <td class="num">${r.jam}</td>
       <td class="num">${C.rupiah(r.rate)}</td>
@@ -410,7 +455,8 @@ function viewHarian(box) {
 
   const foot = `
     <tr>
-      <td class="lbl" colspan="2">Total ${per.totals.hari} hari</td>
+      <td class="lbl">Total</td>
+      <td class="lbl">${per.totals.hari} hari</td>
       <td class="num">${per.totals.jam}</td>
       <td class="num">—</td>
       <td class="num">${C.rupiah(per.totals.komisi)}</td>
@@ -430,12 +476,15 @@ function viewHarian(box) {
     <div class="card">
       <div class="card-head">
         <div><h3>Catatan live ${C.monthLabel(st.period)}</h3>
-        <p class="sub">${per.totals.hari} hari tercatat</p></div>
+        <p class="sub">${limitNote(shown.length, per.rows.length, true)}</p></div>
+        ${limitCtl('harian')}
       </div>
       ${per.rows.length
-        ? `<div class="tbl-scroll"><table class="tbl"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`
+        ? `<div class="tbl-scroll"><table class="tbl freeze-2"><thead>${thead}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`
         : `<div class="empty"><b>Belum ada data bulan ini</b>${isAdmin() ? 'Tekan “Tambah hari” untuk mulai mencatat.' : 'Hubungi admin untuk mengisi data.'}</div>`}
     </div>`;
+
+  wireLimit(box);
 
   box.addEventListener('click', async e => {
     const ed = e.target.dataset.edit, dl = e.target.dataset.del;
@@ -524,6 +573,7 @@ function viewKpi(box) {
   const gap = C.gapToFull(per, st.settings);
   const w = st.settings.weights;
   const sim = salesSim();
+  const shownKpi = tail(per.running.map((r, i) => ({ r, no: i + 1 })), 'kpi');
 
   box.innerHTML = `
     ${meterCard(per, gap)}
@@ -531,9 +581,11 @@ function viewKpi(box) {
     <div class="card">
       <div class="card-head">
         <div><h3>Input KPI per hari</h3>
-        <p class="sub">Hanya kolom kualitas yang diisi manual. Produktivitas dan sales terhitung otomatis dari data harian.</p></div>
+        <p class="sub">Hanya kolom kualitas yang diisi manual. Produktivitas dan sales terhitung otomatis dari data harian.
+        ${limitNote(shownKpi.length, per.running.length)}</p></div>
+        ${limitCtl('kpi')}
       </div>
-      ${per.running.length ? `<div class="tbl-scroll"><table class="tbl">
+      ${per.running.length ? `<div class="tbl-scroll"><table class="tbl freeze-2">
         <thead><tr>
           <th class="num">No</th><th>Tanggal</th>
           <th class="num">Kualitas</th><th class="num">Poin</th>
@@ -541,10 +593,10 @@ function viewKpi(box) {
           <th class="num">${escapeHtml(sim.label)} kumulatif</th><th class="num">Poin</th>
           <th class="num">KPI kumulatif</th><th>Status</th>
         </tr></thead>
-        <tbody>${per.running.map((r, i) => {
+        <tbody>${shownKpi.map(({ r, no }) => {
           const col = C.colorOf(r.kpiKumulatif, st.settings);
           return `<tr>
-            <td class="num">${i + 1}</td>
+            <td class="num">${no}</td>
             <td>${r.date}</td>
             <td class="num">${isAdmin()
               ? `<input type="number" data-kual="${r.id}" value="${r.kualitas ?? ''}" style="width:82px;padding:4px 6px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono);text-align:right">`
@@ -597,6 +649,8 @@ function viewKpi(box) {
       </div>
     </div>`;
 
+  wireLimit(box);
+
   box.querySelectorAll('[data-kual]').forEach(inp => {
     inp.addEventListener('change', async () => {
       const id = inp.dataset.kual;
@@ -618,6 +672,7 @@ const pillClass = key => ({ hijau: 'ok', kuning: 'warn', pink: 'st', merah: 'sp'
 function viewSurat(box) {
   const letters = allLetters();
   const months = st.settings.spRules.validityMonths;
+  const shownSurat = head(letters.map((l, i) => ({ l, no: i + 1 })), 'surat');
 
   $('#headActions').innerHTML =
     `<button class="btn" id="pdfTable">Unduh tabel PDF</button>` +
@@ -631,44 +686,26 @@ function viewSurat(box) {
     SP 3 berarti pemutusan hubungan kerja. Masa berlaku setiap surat ${months} bulan.</div>
 
     <div class="card" id="letterCard">
-      <div class="card-head"><div><h3>Daftar surat</h3><p class="sub">${letters.length} surat tercatat</p></div></div>
-      ${letters.length ? `<div class="tbl-scroll"><table class="tbl">
-        <thead><tr>
-          <th class="num">No</th><th>Jenis</th><th>Periode KPI</th><th class="num">KPI</th>
-          <th>Alasan</th><th>Terbit</th><th>Berlaku sampai</th><th>Masa berlaku</th><th>Sumber</th><th></th>
-        </tr></thead>
-        <tbody>${letters.map((l, i) => {
-          const v = C.validity(l.issuedAt, months);
-          return `<tr>
-            <td class="num">${i + 1}</td>
-            <td><span class="pill ${l.type === 'ST' ? 'st' : 'sp'}">${l.type}</span>${l.terminated ? ' <span class="pill dead">PHK</span>' : ''}</td>
-            <td>${l.period ? C.monthLabel(l.period) : '—'}</td>
-            <td class="num">${l.kpi != null ? Number(l.kpi).toFixed(1) : '—'}</td>
-            <td style="max-width:320px">${escapeHtml(l.reason || '')}</td>
-            <td class="num">${l.issuedAt}</td>
-            <td class="num">${v.expiresAt}</td>
-            <td>${v.expired ? '<span class="pill dead">Expired</span>' : escapeHtml(v.text)}</td>
-            <td>${l.auto ? 'Otomatis' : 'Manual'}</td>
-            <td><div class="rowact">
-              <button class="btn btn-sm" data-view-letter="${l.id}">Lihat</button>
-              <button class="btn btn-sm" data-pdf-letter="${l.id}">PDF</button>
-              ${!l.auto && isAdmin() ? `<button class="btn btn-sm btn-danger" data-del-letter="${l.id}">Hapus</button>` : ''}
-            </div></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table></div>` : `<div class="empty"><b>Belum ada surat</b>Semua periode masih di atas ambang teguran.</div>`}
+      <div class="card-head">
+        <div><h3>Daftar surat</h3><p class="sub">${limitNote(shownSurat.length, letters.length)}</p></div>
+        ${limitCtl('surat')}
+      </div>
+      ${letters.length
+        ? suratTable(shownSurat, months, true)
+        : `<div class="empty"><b>Belum ada surat</b>Semua periode masih di atas ambang teguran.</div>`}
     </div>`;
 
   $('#pdfTable').onclick = () => {
-    const node = box.querySelector('#letterCard .tbl') || box.querySelector('#letterCard');
+    // PDF selalu memuat seluruh surat, tidak terpengaruh pembatas baris.
     const wrap = document.createElement('div');
     wrap.innerHTML = `<h2 style="font-family:serif">Rekapitulasi Surat Teguran dan Surat Peringatan</h2>
-      <p style="font-family:serif">${escapeHtml(currentHost().name)} — dicetak ${C.tanggalPanjang(new Date().toISOString().slice(0, 10))}</p>`;
-    wrap.appendChild(node.cloneNode(true));
-    wrap.querySelectorAll('button').forEach(b => b.remove());
+      <p style="font-family:serif">${escapeHtml(currentHost().name)} — ${letters.length} surat, dicetak ${C.tanggalPanjang(new Date().toISOString().slice(0, 10))}</p>
+      ${suratTable(letters.map((l, i) => ({ l, no: i + 1 })), months, false)}`;
     exportPdf(wrap, `rekap-surat-${currentHost().name}.pdf`);
   };
   if (isAdmin()) $('#addLetter').onclick = () => letterForm();
+
+  wireLimit(box);
 
   box.addEventListener('click', async e => {
     const v = e.target.dataset.viewLetter, p = e.target.dataset.pdfLetter, d = e.target.dataset.delLetter;
@@ -686,6 +723,36 @@ function viewSurat(box) {
       toast('Surat dihapus'); render();
     }
   });
+}
+
+// aksi = true untuk tampilan layar (ada tombol), false untuk ekspor PDF.
+function suratTable(list, months, aksi) {
+  return `<div class="tbl-scroll"><table class="tbl freeze-2">
+    <thead><tr>
+      <th class="num">No</th><th>Jenis</th><th>Periode KPI</th><th class="num">KPI</th>
+      <th>Alasan</th><th>Terbit</th><th>Berlaku sampai</th><th>Masa berlaku</th><th>Sumber</th>
+      ${aksi ? '<th></th>' : ''}
+    </tr></thead>
+    <tbody>${list.map(({ l, no }) => {
+      const v = C.validity(l.issuedAt, months);
+      return `<tr>
+        <td class="num">${no}</td>
+        <td><span class="pill ${l.type === 'ST' ? 'st' : 'sp'}">${l.type}</span>${l.terminated ? ' <span class="pill dead">PHK</span>' : ''}</td>
+        <td>${l.period ? C.monthLabel(l.period) : '—'}</td>
+        <td class="num">${l.kpi != null ? Number(l.kpi).toFixed(1) : '—'}</td>
+        <td style="max-width:320px">${escapeHtml(l.reason || '')}</td>
+        <td class="num">${l.issuedAt}</td>
+        <td class="num">${v.expiresAt}</td>
+        <td>${v.expired ? '<span class="pill dead">Expired</span>' : escapeHtml(v.text)}</td>
+        <td>${l.auto ? 'Otomatis' : 'Manual'}</td>
+        ${aksi ? `<td><div class="rowact">
+          <button class="btn btn-sm" data-view-letter="${l.id}">Lihat</button>
+          <button class="btn btn-sm" data-pdf-letter="${l.id}">PDF</button>
+          ${!l.auto && isAdmin() ? `<button class="btn btn-sm btn-danger" data-del-letter="${l.id}">Hapus</button>` : ''}
+        </div></td>` : ''}
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
 }
 
 function composeLetter(l) {
@@ -755,45 +822,20 @@ function viewRiwayat(box) {
   const count = (p, t) => letters.filter(l => l.period === p && (t === 'ST' ? l.type === 'ST' : l.type.startsWith('SP'))).length;
   const spList = p => letters.filter(l => l.period === p && l.type.startsWith('SP')).map(l => l.type).join(', ') || '—';
 
+  const shownHist = head(series, 'riwayat');
+
   $('#headActions').innerHTML = `<button class="btn" id="pdfHist">Unduh riwayat PDF</button>`;
 
   box.innerHTML = `
     <div class="card" id="histCard">
-      <div class="card-head"><div><h3>Riwayat KPI dan surat per bulan</h3>
-      <p class="sub">${escapeHtml(currentHost().name)} · ${series.length} bulan tercatat</p></div></div>
-      ${series.length ? `<div class="tbl-scroll"><table class="tbl">
-        <thead><tr>
-          <th>Bulan</th><th class="num">Hari</th><th class="num">Jam</th>
-          <th class="num">Kualitas</th><th class="num">Sales</th><th class="num">KPI</th>
-          <th>Status</th><th class="num">Surat teguran</th><th class="num">Surat peringatan</th><th>Rincian SP</th><th class="num">Profit bersih</th>
-        </tr></thead>
-        <tbody>${series.map(m => `<tr>
-          <td>${C.monthLabel(m.period)}</td>
-          <td class="num">${m.per.totals.hari}</td>
-          <td class="num">${m.per.totals.jam}</td>
-          <td class="num">${m.per.kualitasAvg == null ? '—' : m.per.kualitasAvg.toFixed(0)}</td>
-          <td class="num ${m.per.salesValue < 0 ? 'neg' : ''}">${C.rupiah(m.per.salesValue)}</td>
-          <td class="num"><b>${m.kpi.toFixed(1)}</b></td>
-          <td><span class="pill ${pillClass(m.color.key)}">${m.color.key}</span>${m.kpi >= st.settings.spRules.rewardAtKpi ? ' <span class="pill ok">Reward</span>' : ''}</td>
-          <td class="num">${count(m.period, 'ST')}</td>
-          <td class="num">${count(m.period, 'SP')}</td>
-          <td>${spList(m.period)}</td>
-          <td class="num ${m.per.totals.profitBersih < 0 ? 'neg' : ''}">${C.rupiah(m.per.totals.profitBersih)}</td>
-        </tr>`).join('')}</tbody>
-        <tfoot><tr>
-          <td class="lbl">Total</td>
-          <td class="num">${series.reduce((a, m) => a + m.per.totals.hari, 0)}</td>
-          <td class="num">${series.reduce((a, m) => a + m.per.totals.jam, 0)}</td>
-          <td class="num">—</td>
-          <td class="num">${C.rupiah(series.reduce((a, m) => a + m.per.salesValue, 0))}</td>
-          <td class="num">${series.length ? (series.reduce((a, m) => a + m.kpi, 0) / series.length).toFixed(1) : '0'}</td>
-          <td>rata-rata</td>
-          <td class="num">${letters.filter(l => l.type === 'ST').length}</td>
-          <td class="num">${letters.filter(l => l.type.startsWith('SP')).length}</td>
-          <td></td>
-          <td class="num">${C.rupiah(series.reduce((a, m) => a + m.per.totals.profitBersih, 0))}</td>
-        </tr></tfoot>
-      </table></div>` : `<div class="empty"><b>Belum ada riwayat</b>Riwayat muncul setelah ada data harian yang tercatat.</div>`}
+      <div class="card-head">
+        <div><h3>Riwayat KPI dan surat per bulan</h3>
+        <p class="sub">${escapeHtml(currentHost().name)} · ${limitNote(shownHist.length, series.length, true)}</p></div>
+        ${limitCtl('riwayat')}
+      </div>
+      ${series.length
+        ? riwayatTable(shownHist, series, letters, count, spList)
+        : `<div class="empty"><b>Belum ada riwayat</b>Riwayat muncul setelah ada data harian yang tercatat.</div>`}
     </div>
 
     <div class="card">
@@ -809,14 +851,53 @@ function viewRiwayat(box) {
       </div>
     </div>`;
 
+  wireLimit(box);
+
   $('#pdfHist').onclick = () => {
+    // PDF selalu memuat seluruh bulan, tidak terpengaruh pembatas baris.
     const wrap = document.createElement('div');
     wrap.innerHTML = `<h2 style="font-family:serif">Riwayat KPI dan Catatan Disiplin</h2>
-      <p style="font-family:serif">${escapeHtml(currentHost().name)} — dicetak ${C.tanggalPanjang(new Date().toISOString().slice(0, 10))}</p>`;
-    const t = box.querySelector('#histCard .tbl');
-    if (t) wrap.appendChild(t.cloneNode(true));
+      <p style="font-family:serif">${escapeHtml(currentHost().name)} — ${series.length} bulan, dicetak ${C.tanggalPanjang(new Date().toISOString().slice(0, 10))}</p>
+      ${series.length ? riwayatTable(series, series, letters, count, spList) : ''}`;
     exportPdf(wrap, `riwayat-kpi-${currentHost().name}.pdf`);
   };
+}
+
+// baris = yang ditampilkan, semua = dasar perhitungan baris total.
+function riwayatTable(baris, semua, letters, count, spList) {
+  return `<div class="tbl-scroll"><table class="tbl freeze-1">
+    <thead><tr>
+      <th>Bulan</th><th class="num">Hari</th><th class="num">Jam</th>
+      <th class="num">Kualitas</th><th class="num">Sales</th><th class="num">KPI</th>
+      <th>Status</th><th class="num">Surat teguran</th><th class="num">Surat peringatan</th><th>Rincian SP</th><th class="num">Profit bersih</th>
+    </tr></thead>
+    <tbody>${baris.map(m => `<tr>
+      <td>${C.monthLabel(m.period)}</td>
+      <td class="num">${m.per.totals.hari}</td>
+      <td class="num">${m.per.totals.jam}</td>
+      <td class="num">${m.per.kualitasAvg == null ? '—' : m.per.kualitasAvg.toFixed(0)}</td>
+      <td class="num ${m.per.salesValue < 0 ? 'neg' : ''}">${C.rupiah(m.per.salesValue)}</td>
+      <td class="num"><b>${m.kpi.toFixed(1)}</b></td>
+      <td><span class="pill ${pillClass(m.color.key)}">${m.color.key}</span>${m.kpi >= st.settings.spRules.rewardAtKpi ? ' <span class="pill ok">Reward</span>' : ''}</td>
+      <td class="num">${count(m.period, 'ST')}</td>
+      <td class="num">${count(m.period, 'SP')}</td>
+      <td>${spList(m.period)}</td>
+      <td class="num ${m.per.totals.profitBersih < 0 ? 'neg' : ''}">${C.rupiah(m.per.totals.profitBersih)}</td>
+    </tr>`).join('')}</tbody>
+    <tfoot><tr>
+      <td class="lbl">Total ${semua.length} bulan</td>
+      <td class="num">${semua.reduce((a, m) => a + m.per.totals.hari, 0)}</td>
+      <td class="num">${semua.reduce((a, m) => a + m.per.totals.jam, 0)}</td>
+      <td class="num">—</td>
+      <td class="num">${C.rupiah(semua.reduce((a, m) => a + m.per.salesValue, 0))}</td>
+      <td class="num">${semua.length ? (semua.reduce((a, m) => a + m.kpi, 0) / semua.length).toFixed(1) : '0'}</td>
+      <td>rata-rata</td>
+      <td class="num">${letters.filter(l => l.type === 'ST').length}</td>
+      <td class="num">${letters.filter(l => l.type.startsWith('SP')).length}</td>
+      <td></td>
+      <td class="num">${C.rupiah(semua.reduce((a, m) => a + m.per.totals.profitBersih, 0))}</td>
+    </tr></tfoot>
+  </table></div>`;
 }
 
 // ============================================================
