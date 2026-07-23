@@ -523,7 +523,6 @@ function viewKpi(box) {
         <div class="card-body">
           <p style="margin-top:0;font-size:13px;color:var(--ink-2)">
             Poin sales dibaca langsung dari akumulasi <b>${escapeHtml(sim.label)}</b> satu bulan,
-            dicocokkan ke tabel skor sales di Setting. Tidak lagi memakai persentase.
           </p>
           <div class="tbl-scroll"><table class="tbl">
             <tbody>
