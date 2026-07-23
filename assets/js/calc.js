@@ -3,7 +3,11 @@
 //  Semua angka di sini bisa diubah lewat menu Setting.
 // ============================================================
 
+export const SCHEMA = 3;
+
 export const DEFAULT_SETTINGS = {
+  schema: SCHEMA,
+
   company: {
     name: 'PT Nama Perusahaan',
     address: 'Alamat perusahaan',
@@ -12,13 +16,13 @@ export const DEFAULT_SETTINGS = {
     hrTitle: 'HR Manager'
   },
 
-  // Jenis gaji harian (dropdown di form input)
+  // Jenis gaji. Gaji harian = tarif per jam x jam live hari itu.
   gajiTypes: [
-    { id: 'g1', label: 'Gaji harian standar', amount: 60000 },
-    { id: 'g2', label: 'Gaji harian weekend', amount: 75000 }
+    { id: 'g1', label: 'Gaji standar', rate: 20000 },
+    { id: 'g2', label: 'Gaji weekend', rate: 25000 }
   ],
 
-  // Jenis bonus (dropdown di form input)
+  // Jenis bonus (nominal tetap per hari)
   bonusTypes: [
     { id: 'b0', label: 'Tanpa bonus', amount: 0 },
     { id: 'b1', label: 'Bonus kehadiran', amount: 10000 },
@@ -29,7 +33,7 @@ export const DEFAULT_SETTINGS = {
   // Kolom simulasi cancel order.
   //  basis      : 'profit' = hitung dari profit bersih, 'komisi' = hitung dari komisi
   //  deductGaji : true = kurangi lagi dengan (gaji + bonus)
-  //  Default di bawah mereproduksi persis angka spreadsheet yang kamu kirim.
+  //  isSalesBase: kolom ini yang dipakai sebagai nilai sales di penilaian KPI
   simulations: [
     { id: 's50', label: 'Simulasi 50% cancel order', cancelPct: 50, basis: 'profit', deductGaji: false, isSalesBase: true },
     { id: 's85', label: 'Simulasi 85% cancel order', cancelPct: 85, basis: 'komisi', deductGaji: false, isSalesBase: false }
@@ -38,7 +42,7 @@ export const DEFAULT_SETTINGS = {
   // Bobot KPI (total harus 100)
   weights: { kualitas: 40, produktivitas: 10, sales: 50 },
 
-  // Tabel skor. Dibaca dari atas ke bawah: nilai >= min memakai poin baris itu.
+  // Tabel skor. Dibaca dari nilai tertinggi: nilai >= ambang memakai poin baris itu.
   kualitasBands: [
     { min: 230, poin: 100, label: 'di atas 230' },
     { min: 220, poin: 90, label: '220 - 229' },
@@ -59,24 +63,25 @@ export const DEFAULT_SETTINGS = {
     { min: 0, poin: 0, label: 'di bawah 10 jam' }
   ],
 
+  // AMBANG DALAM RUPIAH, dibaca dari akumulasi kolom simulasi acuan satu bulan.
+  // Angka di bawah hanya nilai awal. Sesuaikan dengan target bisnismu.
   salesBands: [
-    { min: 200, poin: 100, label: '200% ke atas' },
-    { min: 175, poin: 90, label: '175% - 199%' },
-    { min: 150, poin: 80, label: '150% - 174%' },
-    { min: 125, poin: 70, label: '125% - 149%' },
-    { min: 100, poin: 60, label: '100% - 124%' },
-    { min: 75, poin: 50, label: '75% - 99%' },
-    { min: 50, poin: 40, label: '50% - 74%' },
-    { min: 25, poin: 30, label: '25% - 49%' },
-    { min: 0, poin: 20, label: '0% - 24%' },
-    { min: -25, poin: 10, label: '-25% - -1%' },
-    { min: -50, poin: 5, label: '-50% - -26%' },
-    { min: -75, poin: 1, label: '-75% - -51%' },
-    { min: -1e9, poin: 0, label: 'di bawah -75%' }
+    { min: 4000000, poin: 100, label: 'Rp4.000.000 ke atas' },
+    { min: 3500000, poin: 90, label: 'Rp3.500.000 - Rp3.999.999' },
+    { min: 3000000, poin: 80, label: 'Rp3.000.000 - Rp3.499.999' },
+    { min: 2500000, poin: 70, label: 'Rp2.500.000 - Rp2.999.999' },
+    { min: 2000000, poin: 60, label: 'Rp2.000.000 - Rp2.499.999' },
+    { min: 1500000, poin: 50, label: 'Rp1.500.000 - Rp1.999.999' },
+    { min: 1000000, poin: 40, label: 'Rp1.000.000 - Rp1.499.999' },
+    { min: 500000, poin: 30, label: 'Rp500.000 - Rp999.999' },
+    { min: 0, poin: 20, label: 'Rp0 - Rp499.999' },
+    { min: -500000, poin: 10, label: 'minus sampai Rp500.000' },
+    { min: -1000000, poin: 5, label: 'minus sampai Rp1.000.000' },
+    { min: -1500000, poin: 1, label: 'minus sampai Rp1.500.000' },
+    { min: -1e12, poin: 0, label: 'minus lebih dari Rp1.500.000' }
   ],
 
-  // Warna status dari nilai KPI bulanan.
-  // Urut dari tinggi ke rendah, nilai >= min memakai baris itu.
+  // Warna status dari nilai KPI bulanan, urut dari tinggi ke rendah.
   kpiColorBands: [
     { min: 85, key: 'hijau', label: 'Hijau - aman', action: 'none' },
     { min: 70, key: 'kuning', label: 'Kuning - perlu perbaikan', action: 'none' },
@@ -85,13 +90,13 @@ export const DEFAULT_SETTINGS = {
   ],
 
   spRules: {
-    teguranToSp1: 3,       // 3x surat teguran = SP 1
-    validityMonths: 6,     // masa berlaku tiap SP/ST
-    rewardAtKpi: 100,      // KPI 100 dapat reward
-    bannedLetter: 'SP3'    // kena banned langsung SP 3
+    teguranToSp1: 3,
+    validityMonths: 6,
+    rewardAtKpi: 100,
+    bannedLetter: 'SP3'
   },
 
-  letters: {}              // diisi dari letters.js saat pertama kali dibuka
+  letters: {}
 };
 
 // ---------- util ----------
@@ -109,11 +114,46 @@ export function bandPoin(bands, value) {
   return 0;
 }
 
+// ---------- migrasi pengaturan lama ----------
+export function migrateSettings(s) {
+  const out = { ...s };
+  if (num(out.schema) >= SCHEMA) return out;
+
+  // Jenis gaji: dari nominal harian menjadi tarif per jam.
+  out.gajiTypes = (out.gajiTypes || DEFAULT_SETTINGS.gajiTypes).map(g => ({
+    id: g.id,
+    label: g.label,
+    rate: g.rate != null ? num(g.rate) : 20000
+  }));
+
+  // Tabel sales: ambang persen tidak lagi berlaku, ganti ke ambang rupiah.
+  out.salesBands = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.salesBands));
+
+  out.schema = SCHEMA;
+  return out;
+}
+
+// Tarif per jam yang berlaku untuk satu baris.
+function rateOf(row, settings) {
+  const found = (settings.gajiTypes || []).find(g => g.id === row.gajiId);
+  if (found) return num(found.rate);
+  if (row.gajiRate != null) return num(row.gajiRate);
+  const jam = num(row.jam);
+  return jam > 0 ? num(row.gaji) / jam : 0;
+}
+
+function bonusOf(row, settings) {
+  const found = (settings.bonusTypes || []).find(b => b.id === row.bonusId);
+  return found ? num(found.amount) : num(row.bonus);
+}
+
 // ---------- baris harian ----------
 export function computeRow(row, settings) {
+  const jam = num(row.jam);
+  const rate = rateOf(row, settings);
+  const gaji = rate * jam;
+  const bonus = bonusOf(row, settings);
   const komisi = num(row.komisi);
-  const gaji = num(row.gaji);
-  const bonus = num(row.bonus);
   const gajiBonus = gaji + bonus;
   const profitBersih = komisi - gajiBonus;
 
@@ -125,21 +165,21 @@ export function computeRow(row, settings) {
     sims[s.id] = v;
   }
 
-  const salesSim = settings.simulations.find(s => s.isSalesBase) || settings.simulations[0];
-  const salesBase = salesSim ? sims[salesSim.id] : 0;
-  const salesPct = gajiBonus > 0 ? (salesBase / gajiBonus) * 100 : 0;
+  const salesSim = salesSimOf(settings);
+  const salesValue = salesSim ? sims[salesSim.id] : 0;
 
   return {
     ...row,
-    gajiBonus,
-    profitBersih,
-    sims,
-    salesPct,
+    jam, rate, gaji, bonus, gajiBonus, profitBersih, sims, salesValue,
     kualitasPoin: row.kualitas === '' || row.kualitas == null
       ? null
       : bandPoin(settings.kualitasBands, row.kualitas),
-    salesPoin: bandPoin(settings.salesBands, salesPct)
+    salesPoin: bandPoin(settings.salesBands, salesValue)
   };
+}
+
+export function salesSimOf(settings) {
+  return (settings.simulations || []).find(s => s.isSalesBase) || (settings.simulations || [])[0];
 }
 
 // ---------- rekap bulanan / kumulatif ----------
@@ -156,19 +196,17 @@ export function computePeriod(rows, settings) {
   for (const s of settings.simulations) totals.sims[s.id] = 0;
 
   for (const r of calc) {
-    totals.jam += num(r.jam);
+    totals.jam += r.jam;
     totals.komisi += num(r.komisi);
-    totals.gaji += num(r.gaji);
-    totals.bonus += num(r.bonus);
+    totals.gaji += r.gaji;
+    totals.bonus += r.bonus;
     totals.gajiBonus += r.gajiBonus;
     totals.profitBersih += r.profitBersih;
     for (const s of settings.simulations) totals.sims[s.id] += r.sims[s.id];
   }
 
-  const salesSim = settings.simulations.find(s => s.isSalesBase) || settings.simulations[0];
-  const salesPct = totals.gajiBonus > 0
-    ? ((salesSim ? totals.sims[salesSim.id] : 0) / totals.gajiBonus) * 100
-    : 0;
+  const salesSim = salesSimOf(settings);
+  const salesValue = salesSim ? totals.sims[salesSim.id] : 0;
 
   const kualitasVals = calc.filter(r => r.kualitas !== '' && r.kualitas != null).map(r => num(r.kualitas));
   const kualitasAvg = kualitasVals.length
@@ -178,7 +216,7 @@ export function computePeriod(rows, settings) {
   const poin = {
     kualitas: kualitasAvg == null ? 0 : bandPoin(settings.kualitasBands, kualitasAvg),
     produktivitas: bandPoin(settings.produktivitasBands, totals.jam),
-    sales: bandPoin(settings.salesBands, salesPct)
+    sales: bandPoin(settings.salesBands, salesValue)
   };
 
   const w = settings.weights;
@@ -187,27 +225,25 @@ export function computePeriod(rows, settings) {
       poin.produktivitas * num(w.produktivitas) +
       poin.sales * num(w.sales)) / 100;
 
-  // KPI berjalan per hari (kumulatif sampai tanggal tersebut)
-  let jamRun = 0, gbRun = 0, salesRun = 0, kualSum = 0, kualN = 0;
+  // KPI berjalan per hari (akumulasi sampai tanggal tersebut)
+  let jamRun = 0, salesRun = 0, kualSum = 0, kualN = 0;
   const running = calc.map(r => {
-    jamRun += num(r.jam);
-    gbRun += r.gajiBonus;
+    jamRun += r.jam;
     salesRun += salesSim ? r.sims[salesSim.id] : 0;
     if (r.kualitas !== '' && r.kualitas != null) { kualSum += num(r.kualitas); kualN++; }
 
-    const sPct = gbRun > 0 ? (salesRun / gbRun) * 100 : 0;
     const kAvg = kualN ? kualSum / kualN : null;
     const p = {
       kualitas: kAvg == null ? 0 : bandPoin(settings.kualitasBands, kAvg),
       produktivitas: bandPoin(settings.produktivitasBands, jamRun),
-      sales: bandPoin(settings.salesBands, sPct)
+      sales: bandPoin(settings.salesBands, salesRun)
     };
     const k = (p.kualitas * num(w.kualitas) + p.produktivitas * num(w.produktivitas) + p.sales * num(w.sales)) / 100;
-    return { ...r, kpiKumulatif: k, jamKumulatif: jamRun, salesPctKumulatif: sPct, poinKumulatif: p };
+    return { ...r, kpiKumulatif: k, jamKumulatif: jamRun, salesKumulatif: salesRun, poinKumulatif: p };
   });
 
   return {
-    rows: calc, running, totals, salesPct, kualitasAvg, poin, kpi,
+    rows: calc, running, totals, salesValue, kualitasAvg, poin, kpi,
     color: colorOf(kpi, settings)
   };
 }
@@ -218,28 +254,28 @@ export function colorOf(kpi, settings) {
   return sorted[sorted.length - 1];
 }
 
-// Berapa persen lagi supaya KPI tembus 100.
-// Dihitung dari sisi sales, karena itu satu-satunya komponen yang masih bisa dikejar harian.
+// Berapa poin lagi supaya KPI tembus 100, dan berapa rupiah simulasi yang dibutuhkan.
 export function gapToFull(period, settings) {
   const w = settings.weights;
   const need = 100;
   const current = period.kpi;
-  if (current >= need) return { done: true, kurang: 0, salesPctTarget: null };
+  if (current >= need) return { done: true, kurang: 0, salesTarget: null };
 
   const fixed = (period.poin.kualitas * num(w.kualitas) + period.poin.produktivitas * num(w.produktivitas)) / 100;
   const neededSalesPoin = num(w.sales) > 0 ? ((need - fixed) * 100) / num(w.sales) : Infinity;
 
-  let salesPctTarget = null;
+  let salesTarget = null;
   if (neededSalesPoin <= 100) {
     const band = [...settings.salesBands].sort((a, b) => a.min - b.min).find(b => b.poin >= neededSalesPoin);
-    if (band) salesPctTarget = band.min;
+    if (band) salesTarget = band.min;
   }
 
   return {
     done: false,
     kurang: need - current,
     neededSalesPoin: Math.min(neededSalesPoin, 100),
-    salesPctTarget,
+    salesTarget,
+    kurangRupiah: salesTarget == null ? null : Math.max(0, salesTarget - period.salesValue),
     tidakTercapai: neededSalesPoin > 100
   };
 }
@@ -272,17 +308,15 @@ export function validity(issuedAt, months, today = new Date()) {
 }
 
 // ---------- generator surat otomatis ----------
-// monthly = [{ period:'YYYY-MM', kpi, color, banned }] urut lama ke baru
 export function generateLetters(monthly, settings) {
   const rules = settings.spRules;
   const out = [];
-  let teguranAktif = [];   // periode ST yang belum dikonversi
-  let spLevel = 0;         // 0 = belum ada SP aktif
+  let teguranAktif = [];
+  let spLevel = 0;
 
   for (const m of monthly) {
     const endOfMonth = lastDayOf(m.period);
 
-    // buang ST yang sudah lewat masa berlaku
     teguranAktif = teguranAktif.filter(p =>
       !validity(lastDayOf(p), rules.validityMonths, new Date(endOfMonth + 'T00:00:00')).expired
     );
