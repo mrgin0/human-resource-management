@@ -18,7 +18,7 @@
   <div class="gate-card">
     <div class="onair" aria-hidden="true"><span class="dot"></span>ON AIR</div>
     <h1>Human Resource Management</h1>
-    <p class="gate-sub"></p>
+    <p class="gate-sub">Catat performa live harian, hitung KPI otomatis, terbitkan surat teguran dan surat peringatan.</p>
 
     <form id="loginForm" autocomplete="on">
       <label class="fld"><span>Email</span><input type="email" id="loginEmail" required placeholder="nama@perusahaan.com"></label>
@@ -38,12 +38,13 @@
 <div id="shell" class="shell" hidden>
 
   <aside class="rail">
-    <div class="rail-brand">
+    <button class="rail-brand" id="railToggle" type="button" aria-expanded="false" aria-controls="railPicker">
       <span class="rail-mark">HR</span>
       <span class="rail-name">Human Resource</span>
-    </div>
+      <span class="rail-chev" aria-hidden="true"></span>
+    </button>
 
-    <div class="rail-picker">
+    <div class="rail-picker" id="railPicker">
       <label class="fld tight"><span>Host</span>
         <select id="hostPick"></select>
       </label>
@@ -73,7 +74,6 @@
         <p class="eyebrow" id="ctxLine">—</p>
         <h2 id="viewTitle">Ringkasan</h2>
       </div>
-      <div class="head-actions" id="headActions"></div>
     </header>
 
     <div id="views">
@@ -84,6 +84,8 @@
       <section class="view" data-view="riwayat"></section>
       <section class="view" data-view="setting"></section>
     </div>
+
+    <div class="head-actions" id="headActions"></div>
   </main>
 </div>
 
