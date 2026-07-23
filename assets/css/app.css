@@ -50,6 +50,8 @@ body{
   margin:0;background:var(--paper);color:var(--ink);
   font-family:var(--body);font-size:14px;line-height:1.5;
   -webkit-font-smoothing:antialiased;
+  -webkit-text-size-adjust:100%;text-size-adjust:100%;
+  overflow-x:hidden;
 }
 h1,h2,h3,h4{font-family:var(--display);margin:0;letter-spacing:-.02em;line-height:1.15}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -195,7 +197,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .work-head h2{font-size:26px}
 .head-actions{display:flex;gap:8px;flex-wrap:wrap}
 
-.view{display:none}
+.view{display:none;min-width:0}
 .view.is-active{display:block}
 
 .card{
@@ -249,6 +251,48 @@ button,input,select,textarea{font:inherit;color:inherit}
 .host-tab span{font-family:var(--mono);font-size:10.5px;color:var(--mute)}
 .host-tab.is-active{border-color:var(--signal);background:var(--signal-soft);box-shadow:inset 0 -2px 0 var(--signal)}
 .host-tab.is-active span{color:var(--signal-deep)}
+
+/* ---------- kolom beku ----------
+   freeze-1 mengunci kolom pertama, freeze-2 mengunci dua kolom pertama
+   (nomor urut dan tanggal). Latar wajib pekat supaya sel yang lewat di
+   belakangnya tidak menembus. */
+table.tbl.freeze-1 th:nth-child(1),
+table.tbl.freeze-1 td:nth-child(1),
+table.tbl.freeze-2 th:nth-child(1),
+table.tbl.freeze-2 td:nth-child(1),
+table.tbl.freeze-2 th:nth-child(2),
+table.tbl.freeze-2 td:nth-child(2){
+  position:sticky;z-index:2;background:var(--card);
+}
+table.tbl.freeze-1 thead th:nth-child(1),
+table.tbl.freeze-2 thead th:nth-child(1),
+table.tbl.freeze-2 thead th:nth-child(2),
+table.tbl.freeze-1 tfoot td:nth-child(1),
+table.tbl.freeze-2 tfoot td:nth-child(1),
+table.tbl.freeze-2 tfoot td:nth-child(2){background:#F5F7FA;z-index:3}
+
+table.tbl.freeze-1 th:nth-child(1),
+table.tbl.freeze-1 td:nth-child(1){left:0;min-width:124px;border-right:1px solid var(--line)}
+
+table.tbl.freeze-2 th:nth-child(1),
+table.tbl.freeze-2 td:nth-child(1){left:0;width:46px;min-width:46px;max-width:46px}
+table.tbl.freeze-2 th:nth-child(2),
+table.tbl.freeze-2 td:nth-child(2){left:46px;min-width:112px;border-right:1px solid var(--line)}
+
+table.tbl.freeze-1 tbody tr:hover td:nth-child(1),
+table.tbl.freeze-2 tbody tr:hover td:nth-child(1),
+table.tbl.freeze-2 tbody tr:hover td:nth-child(2){background:#FAFBFD}
+
+/* ---------- pembatas jumlah baris ---------- */
+.rowlimit{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.rowlimit > span{
+  font-family:var(--display);font-size:10px;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--mute);
+}
+.rowlimit select{
+  padding:6px 9px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--card);font-size:12.5px;
+}
 
 /* ---------- statistik ---------- */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:var(--line-soft)}
@@ -343,7 +387,7 @@ table.tbl tfoot td.lbl{font-family:var(--display);letter-spacing:.08em;text-tran
    Baris atas berisi merek di kiri dan akun di kanan. Host dan periode
    disembunyikan sampai baris merek ditekan. */
 @media (max-width:900px){
-  .shell{grid-template-columns:1fr}
+  .shell{grid-template-columns:minmax(0,1fr)}
 
   .rail{
     position:sticky;top:0;height:auto;z-index:30;
@@ -435,6 +479,16 @@ table.tbl tfoot td.lbl{font-family:var(--display);letter-spacing:.08em;text-tran
   table.tbl{font-size:12px}
   table.tbl th,table.tbl td{padding:8px 10px}
 
+  /* Kolom beku dipersempit supaya sisa tabel tetap kebagian ruang. */
+  table.tbl.freeze-1 th:nth-child(1),
+  table.tbl.freeze-1 td:nth-child(1){min-width:104px}
+  table.tbl.freeze-2 th:nth-child(1),
+  table.tbl.freeze-2 td:nth-child(1){width:34px;min-width:34px;max-width:34px;padding-left:8px;padding-right:6px}
+  table.tbl.freeze-2 th:nth-child(2),
+  table.tbl.freeze-2 td:nth-child(2){left:34px;min-width:92px}
+
+  .rowlimit > span{display:none}
+
   /* Baris pengaturan menumpuk, label kolom disembunyikan karena
      tiap input sudah diberi placeholder sendiri. */
   .band-head{display:none !important}
@@ -474,4 +528,6 @@ table.tbl tfoot td.lbl{font-family:var(--display);letter-spacing:.08em;text-tran
   .work{padding:0;max-width:none}
   .card{box-shadow:none;border-color:#999;page-break-inside:avoid}
   table.tbl th{background:#eee}
+  table.tbl th,table.tbl td{position:static !important}
+  .rowlimit{display:none !important}
 }
