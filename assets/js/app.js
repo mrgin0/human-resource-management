@@ -23,6 +23,7 @@ const st = {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const isAdmin = () => st.role === 'admin';
+const salesSim = () => C.salesSimOf(st.settings) || { id: '', label: 'Simulasi' };
 
 // ============================================================
 //  BOOT
@@ -97,10 +98,16 @@ async function startSession(user) {
 }
 
 async function loadAll() {
-  st.settings = await S.loadSettings();
+  const raw = await S.loadSettings();
+  st.settings = C.migrateSettings(raw);
   if (!st.settings.letters || !st.settings.letters.ST) {
     st.settings.letters = { ...DEFAULT_LETTERS };
   }
+  // Simpan hasil migrasi supaya struktur lama tidak dibaca ulang tiap kali.
+  if (isAdmin() && C.num(raw.schema) < C.SCHEMA) {
+    try { await S.saveSettings(st.settings); } catch (e) { /* abaikan */ }
+  }
+
   st.hosts = await S.listAll('hosts');
   if (!st.hosts.length) {
     const id = await S.create('hosts', { name: 'Host 1', jabatan: 'Host Live', active: true });
@@ -119,6 +126,10 @@ function fillHostPicker() {
   $('#hostPick').innerHTML = st.hosts
     .map(h => `<option value="${h.id}"${h.id === st.hostId ? ' selected' : ''}>${escapeHtml(h.name)}</option>`)
     .join('');
+
+  // Label sidebar ikut menampilkan jumlah host, misal "Host (2 team)".
+  const label = $('#hostPick').closest('.fld')?.querySelector('span');
+  if (label) label.textContent = `Host (${st.hosts.length} team)`;
 }
 
 $('#hostPick').addEventListener('change', e => { st.hostId = e.target.value; render(); });
@@ -212,6 +223,7 @@ function viewDashboard(box) {
   const aktif = letters.filter(l => !C.validity(l.issuedAt, st.settings.spRules.validityMonths).expired);
 
   $('#headActions').innerHTML = `<button class="btn" data-act="print">Cetak halaman</button>`;
+  $('#headActions').onclick = e => { if (e.target.dataset.act === 'print') window.print(); };
 
   box.innerHTML = `
     ${meterCard(per, gap)}
@@ -221,7 +233,7 @@ function viewDashboard(box) {
       ${stat('Komisi', C.rupiah(per.totals.komisi))}
       ${stat('Gaji + bonus', C.rupiah(per.totals.gajiBonus))}
       ${stat('Profit bersih', C.rupiah(per.totals.profitBersih), per.totals.profitBersih < 0 ? 'Minus' : '')}
-      ${stat('Sales', C.pct(per.salesPct), `${per.poin.sales} poin`)}
+      ${stat('Sales', C.rupiah(per.salesValue), `${per.poin.sales} poin`)}
       ${stat('Surat aktif', aktif.length, aktif.length ? aktif.map(l => l.type).join(', ') : 'Tidak ada')}
     </div></div>
 
@@ -233,7 +245,7 @@ function viewDashboard(box) {
           <tbody>
             ${compRow('Kualitas', per.kualitasAvg == null ? 'belum diisi' : per.kualitasAvg.toFixed(0), per.poin.kualitas, w.kualitas)}
             ${compRow('Produktivitas', `${per.totals.jam} jam`, per.poin.produktivitas, w.produktivitas)}
-            ${compRow('Sales', C.pct(per.salesPct), per.poin.sales, w.sales)}
+            ${compRow(`Sales (${escapeHtml(salesSim().label)})`, C.rupiah(per.salesValue), per.poin.sales, w.sales)}
           </tbody>
           <tfoot><tr><td class="lbl" colspan="4">KPI bulan ini</td><td class="num">${per.kpi.toFixed(1)}</td></tr></tfoot>
         </table></div>
@@ -255,8 +267,6 @@ function viewDashboard(box) {
         : `<div class="empty"><b>Belum ada surat</b>Catatan disiplin masih bersih.</div>`}
       </div>
     </div>`;
-
-  $('#headActions').onclick = e => { if (e.target.dataset.act === 'print') window.print(); };
 }
 
 function meterCard(per, gap) {
@@ -273,8 +283,8 @@ function meterCard(per, gap) {
     note = `Kurang <b>${gap.kurang.toFixed(1)} poin</b> lagi menuju 100. Poin sales maksimum sudah tidak cukup menutup selisih bulan ini — kejar lewat kualitas dan jam live.`;
   } else {
     note = `Kurang <b>${gap.kurang.toFixed(1)} poin</b> lagi menuju 100.` +
-      (gap.salesPctTarget != null
-        ? ` Butuh sales kumulatif menyentuh <b>${gap.salesPctTarget}%</b> (sekarang ${C.pct(per.salesPct)}).`
+      (gap.salesTarget != null
+        ? ` Butuh ${escapeHtml(salesSim().label)} kumulatif menyentuh <b>${C.rupiah(gap.salesTarget)}</b>, kurang <b>${C.rupiah(gap.kurangRupiah)}</b> lagi dari ${C.rupiah(per.salesValue)}.`
         : '');
   }
 
@@ -317,7 +327,7 @@ function viewHarian(box) {
   const head = `
     <tr>
       <th class="num">No</th><th>Tanggal</th><th class="num">Live/jam</th>
-      <th class="num">Komisi</th><th class="num">Gaji</th><th class="num">Bonus</th>
+      <th class="num">Tarif/jam</th><th class="num">Komisi</th><th class="num">Gaji</th><th class="num">Bonus</th>
       <th class="num">Gaji + bonus</th><th class="num">Profit bersih</th>
       ${sims.map(s => `<th class="num">${escapeHtml(s.label)}</th>`).join('')}
       <th></th>
@@ -327,7 +337,8 @@ function viewHarian(box) {
     <tr>
       <td class="num">${i + 1}</td>
       <td>${r.date}${r.banned ? ' <span class="pill sp">Banned</span>' : ''}</td>
-      <td class="num">${C.num(r.jam)}</td>
+      <td class="num">${r.jam}</td>
+      <td class="num">${C.rupiah(r.rate)}</td>
       <td class="num">${C.rupiah(r.komisi)}</td>
       <td class="num">${C.rupiah(r.gaji)}</td>
       <td class="num">${C.rupiah(r.bonus)}</td>
@@ -343,6 +354,7 @@ function viewHarian(box) {
     <tr>
       <td class="lbl" colspan="2">Total ${per.totals.hari} hari</td>
       <td class="num">${per.totals.jam}</td>
+      <td class="num">—</td>
       <td class="num">${C.rupiah(per.totals.komisi)}</td>
       <td class="num">${C.rupiah(per.totals.gaji)}</td>
       <td class="num">${C.rupiah(per.totals.bonus)}</td>
@@ -353,7 +365,7 @@ function viewHarian(box) {
     </tr>`;
 
   box.innerHTML = `
-    <div class="note"><b>Cara hitung.</b> Gaji + bonus dan profit bersih terisi otomatis.
+    <div class="note"><b>Cara hitung.</b> Gaji = tarif per jam × jam live. Gaji + bonus dan profit bersih terisi otomatis.
     Kolom simulasi mengikuti aturan di Setting: saat ini
     ${sims.map(s => `<em>${escapeHtml(s.label)}</em> = ${s.basis === 'komisi' ? 'komisi' : 'profit bersih'} × ${(100 - C.num(s.cancelPct))}%${s.deductGaji ? ' − (gaji + bonus)' : ''}`).join('; ')}.</div>
 
@@ -382,8 +394,7 @@ function rowForm(row) {
   const g = st.settings.gajiTypes, b = st.settings.bonusTypes;
   const cur = row || {
     date: `${st.period}-01`, jam: 3, komisi: 0,
-    gajiId: g[0]?.id, gaji: g[0]?.amount || 0,
-    bonusId: b[0]?.id, bonus: b[0]?.amount || 0, banned: false
+    gajiId: g[0]?.id, bonusId: b[0]?.id, banned: false
   };
 
   openModal(row ? 'Ubah catatan harian' : 'Tambah catatan harian', `
@@ -391,8 +402,8 @@ function rowForm(row) {
       <label class="fld"><span>Tanggal</span><input type="date" id="f_date" value="${cur.date}"></label>
       <label class="fld"><span>Live / jam</span><input type="number" step="0.5" min="0" id="f_jam" value="${C.num(cur.jam)}"></label>
       <label class="fld"><span>Komisi yang dihasilkan (Rp)</span><input type="number" min="0" id="f_komisi" value="${C.num(cur.komisi)}"></label>
-      <label class="fld"><span>Jenis gaji</span><select id="f_gaji">
-        ${g.map(x => `<option value="${x.id}"${x.id === cur.gajiId ? ' selected' : ''}>${escapeHtml(x.label)} — ${C.rupiah(x.amount)}</option>`).join('')}
+      <label class="fld"><span>Jenis gaji (tarif per jam)</span><select id="f_gaji">
+        ${g.map(x => `<option value="${x.id}"${x.id === cur.gajiId ? ' selected' : ''}>${escapeHtml(x.label)} — ${C.rupiah(x.rate)}/jam</option>`).join('')}
       </select></label>
       <label class="fld"><span>Jenis bonus</span><select id="f_bonus">
         ${b.map(x => `<option value="${x.id}"${x.id === cur.bonusId ? ' selected' : ''}>${escapeHtml(x.label)} — ${C.rupiah(x.amount)}</option>`).join('')}
@@ -408,13 +419,17 @@ function rowForm(row) {
     { label: 'Simpan', primary: true, run: async () => {
       const gs = st.settings.gajiTypes.find(x => x.id === $('#f_gaji').value);
       const bs = st.settings.bonusTypes.find(x => x.id === $('#f_bonus').value);
+      const jam = C.num($('#f_jam').value);
       const data = {
         hostId: st.hostId,
         date: $('#f_date').value,
-        jam: C.num($('#f_jam').value),
+        jam,
         komisi: C.num($('#f_komisi').value),
-        gajiId: gs?.id || '', gaji: C.num(gs?.amount),
-        bonusId: bs?.id || '', bonus: C.num(bs?.amount),
+        gajiId: gs?.id || '',
+        gajiRate: C.num(gs?.rate),
+        gaji: C.num(gs?.rate) * jam,
+        bonusId: bs?.id || '',
+        bonus: C.num(bs?.amount),
         kualitas: $('#f_kualitas').value === '' ? null : C.num($('#f_kualitas').value),
         banned: $('#f_banned').checked
       };
@@ -427,17 +442,19 @@ function rowForm(row) {
   ]);
 
   const live = () => {
-    const gs = st.settings.gajiTypes.find(x => x.id === $('#f_gaji').value);
-    const bs = st.settings.bonusTypes.find(x => x.id === $('#f_bonus').value);
     const r = C.computeRow({
-      komisi: C.num($('#f_komisi').value), gaji: C.num(gs?.amount), bonus: C.num(bs?.amount)
+      jam: C.num($('#f_jam').value),
+      komisi: C.num($('#f_komisi').value),
+      gajiId: $('#f_gaji').value,
+      bonusId: $('#f_bonus').value
     }, st.settings);
     $('#f_preview').innerHTML =
-      `<b>Hasil hitung.</b> Gaji + bonus ${C.rupiah(r.gajiBonus)} · Profit bersih ${C.rupiah(r.profitBersih)} · ` +
+      `<b>Hasil hitung.</b> Gaji ${C.rupiah(r.rate)} × ${r.jam} jam = ${C.rupiah(r.gaji)} · ` +
+      `Gaji + bonus ${C.rupiah(r.gajiBonus)} · Profit bersih ${C.rupiah(r.profitBersih)} · ` +
       st.settings.simulations.map(s => `${escapeHtml(s.label)} ${C.rupiah(r.sims[s.id])}`).join(' · ') +
-      ` · Sales ${C.pct(r.salesPct)} (${r.salesPoin} poin)`;
+      ` · Poin sales ${r.salesPoin}`;
   };
-  ['#f_komisi', '#f_gaji', '#f_bonus'].forEach(s => $(s).addEventListener('input', live));
+  ['#f_jam', '#f_komisi', '#f_gaji', '#f_bonus'].forEach(s => $(s).addEventListener('input', live));
   live();
 }
 
@@ -448,6 +465,7 @@ function viewKpi(box) {
   const per = C.computePeriod(periodRows(st.period), st.settings);
   const gap = C.gapToFull(per, st.settings);
   const w = st.settings.weights;
+  const sim = salesSim();
 
   box.innerHTML = `
     ${meterCard(per, gap)}
@@ -462,7 +480,7 @@ function viewKpi(box) {
           <th class="num">No</th><th>Tanggal</th>
           <th class="num">Kualitas</th><th class="num">Poin</th>
           <th class="num">Jam hari ini</th><th class="num">Jam kumulatif</th><th class="num">Poin</th>
-          <th class="num">Sales kumulatif</th><th class="num">Poin</th>
+          <th class="num">${escapeHtml(sim.label)} kumulatif</th><th class="num">Poin</th>
           <th class="num">KPI kumulatif</th><th>Status</th>
         </tr></thead>
         <tbody>${per.running.map((r, i) => {
@@ -474,10 +492,10 @@ function viewKpi(box) {
               ? `<input type="number" data-kual="${r.id}" value="${r.kualitas ?? ''}" style="width:82px;padding:4px 6px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono);text-align:right">`
               : (r.kualitas ?? '—')}</td>
             <td class="num">${r.kualitasPoin ?? '—'}</td>
-            <td class="num">${C.num(r.jam)}</td>
+            <td class="num">${r.jam}</td>
             <td class="num">${r.jamKumulatif}</td>
             <td class="num">${r.poinKumulatif.produktivitas}</td>
-            <td class="num">${C.pct(r.salesPctKumulatif)}</td>
+            <td class="num ${r.salesKumulatif < 0 ? 'neg' : ''}">${C.rupiah(r.salesKumulatif)}</td>
             <td class="num">${r.poinKumulatif.sales}</td>
             <td class="num"><b>${r.kpiKumulatif.toFixed(1)}</b></td>
             <td><span class="pill ${pillClass(col.key)}">${col.key}</span></td>
@@ -494,25 +512,27 @@ function viewKpi(box) {
           <tbody>
             ${compRow('Kualitas (rata-rata)', per.kualitasAvg == null ? 'belum diisi' : per.kualitasAvg.toFixed(1), per.poin.kualitas, w.kualitas)}
             ${compRow('Produktivitas', `${per.totals.jam} jam`, per.poin.produktivitas, w.produktivitas)}
-            ${compRow('Sales', C.pct(per.salesPct), per.poin.sales, w.sales)}
+            ${compRow('Sales', C.rupiah(per.salesValue), per.poin.sales, w.sales)}
           </tbody>
           <tfoot><tr><td class="lbl" colspan="4">Total KPI</td><td class="num">${per.kpi.toFixed(1)}</td></tr></tfoot>
         </table></div>
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Cara sales dihitung</h3></div>
+        <div class="card-head"><h3>Cara sales dinilai</h3></div>
         <div class="card-body">
           <p style="margin-top:0;font-size:13px;color:var(--ink-2)">
-            Sales % = hasil <b>${escapeHtml((st.settings.simulations.find(s => s.isSalesBase) || {}).label || '-')}</b>
-            dibagi <b>gaji + bonus</b>, dihitung dari akumulasi satu bulan.
+            Poin sales dibaca langsung dari akumulasi <b>${escapeHtml(sim.label)}</b> satu bulan,
+            dicocokkan ke tabel skor sales di Setting. Tidak lagi memakai persentase.
           </p>
           <div class="tbl-scroll"><table class="tbl">
             <tbody>
-              <tr><td>Simulasi kumulatif</td><td class="num">${C.rupiah(per.totals.sims[(st.settings.simulations.find(s => s.isSalesBase) || st.settings.simulations[0]).id])}</td></tr>
-              <tr><td>Gaji + bonus kumulatif</td><td class="num">${C.rupiah(per.totals.gajiBonus)}</td></tr>
-              <tr><td>Sales</td><td class="num"><b>${C.pct(per.salesPct)}</b></td></tr>
+              <tr><td>${escapeHtml(sim.label)} kumulatif</td><td class="num"><b>${C.rupiah(per.salesValue)}</b></td></tr>
               <tr><td>Poin sales</td><td class="num"><b>${per.poin.sales}</b></td></tr>
+              <tr><td>Ambang poin berikutnya</td><td class="num">${(() => {
+                const next = [...st.settings.salesBands].sort((a, b) => a.min - b.min).find(bd => bd.min > per.salesValue);
+                return next ? `${C.rupiah(next.min)} → ${next.poin} poin` : 'sudah tertinggi';
+              })()}</td></tr>
             </tbody>
           </table></div>
         </div>
@@ -597,7 +617,7 @@ function viewSurat(box) {
     if (v || p) {
       const l = letters.find(x => x.id === (v || p));
       const text = composeLetter(l);
-      if (p) exportPdf(text, `${l.type}-${escapeHtml(currentHost().name)}-${l.period || l.issuedAt}.pdf`);
+      if (p) exportPdf(text, `${l.type}-${currentHost().name}-${l.period || l.issuedAt}.pdf`);
       else openModal(letterTitle(l.type), `<div class="letter-preview">${escapeHtml(text)}</div>`, [
         { label: 'Unduh PDF', primary: true, keepOpen: true, run: () => exportPdf(text, `${l.type}-${l.period || l.issuedAt}.pdf`) }
       ]);
@@ -694,7 +714,7 @@ function viewRiwayat(box) {
           <td class="num">${m.per.totals.hari}</td>
           <td class="num">${m.per.totals.jam}</td>
           <td class="num">${m.per.kualitasAvg == null ? '—' : m.per.kualitasAvg.toFixed(0)}</td>
-          <td class="num">${C.pct(m.per.salesPct)}</td>
+          <td class="num ${m.per.salesValue < 0 ? 'neg' : ''}">${C.rupiah(m.per.salesValue)}</td>
           <td class="num"><b>${m.kpi.toFixed(1)}</b></td>
           <td><span class="pill ${pillClass(m.color.key)}">${m.color.key}</span>${m.kpi >= st.settings.spRules.rewardAtKpi ? ' <span class="pill ok">Reward</span>' : ''}</td>
           <td class="num">${count(m.period, 'ST')}</td>
@@ -706,7 +726,8 @@ function viewRiwayat(box) {
           <td class="lbl">Total</td>
           <td class="num">${series.reduce((a, m) => a + m.per.totals.hari, 0)}</td>
           <td class="num">${series.reduce((a, m) => a + m.per.totals.jam, 0)}</td>
-          <td class="num">—</td><td class="num">—</td>
+          <td class="num">—</td>
+          <td class="num">${C.rupiah(series.reduce((a, m) => a + m.per.salesValue, 0))}</td>
           <td class="num">${series.length ? (series.reduce((a, m) => a + m.kpi, 0) / series.length).toFixed(1) : '0'}</td>
           <td>rata-rata</td>
           <td class="num">${letters.filter(l => l.type === 'ST').length}</td>
@@ -743,15 +764,21 @@ function viewRiwayat(box) {
 // ============================================================
 //  06 — SETTING
 // ============================================================
+const SAVE_BTN = '<button class="btn btn-sm btn-primary" data-save>Simpan</button>';
+
 function viewSetting(box) {
   if (!isAdmin()) { box.innerHTML = `<div class="empty"><b>Akses terbatas</b>Menu ini hanya untuk admin.</div>`; return; }
   const s = st.settings;
+  const sim = salesSim();
 
   $('#headActions').innerHTML = `<button class="btn btn-primary" id="saveSet">Simpan semua perubahan</button>`;
 
   box.innerHTML = `
+    <div class="note"><b>Menyimpan.</b> Setiap kartu punya tombol Simpan sendiri. Perubahan baru masuk ke database
+    setelah tombol itu ditekan, jadi tekan Simpan sebelum berpindah menu atau menutup browser.</div>
+
     <div class="card">
-      <div class="card-head"><h3>Identitas perusahaan</h3><p class="sub">Dipakai pada kop surat</p></div>
+      <div class="card-head"><div><h3>Identitas perusahaan</h3><p class="sub">Dipakai pada kop surat</p></div>${SAVE_BTN}</div>
       <div class="card-body"><div class="grid grid-3">
         ${txt('company.name', 'Nama perusahaan', s.company.name)}
         ${txt('company.address', 'Alamat', s.company.address)}
@@ -762,24 +789,25 @@ function viewSetting(box) {
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>Host</h3>
+      <div class="card-head"><div><h3>Host</h3><p class="sub">${st.hosts.length} team terdaftar. Perubahan nama langsung tersimpan.</p></div>
         <button class="btn btn-sm" id="addHost">Tambah host</button></div>
       <div class="card-body" id="hostList"></div>
     </div>
 
     <div class="grid grid-2">
-      ${listCard('gajiTypes', 'Jenis gaji harian', 'Nominal dipakai di dropdown input harian')}
-      ${listCard('bonusTypes', 'Jenis bonus', 'Nominal dipakai di dropdown input harian')}
+      ${listCard('gajiTypes', 'Jenis gaji harian', 'Gaji harian = tarif per jam × jam live', 'rate', 'Tarif per jam (Rp)')}
+      ${listCard('bonusTypes', 'Jenis bonus', 'Nominal tetap per hari', 'amount', 'Nominal (Rp)')}
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>Kolom simulasi cancel order</h3>
-        <button class="btn btn-sm" data-add-sim>Tambah kolom</button></div>
+      <div class="card-head"><div><h3>Kolom simulasi cancel order</h3>
+        <p class="sub">Kolom dengan “Dasar sales” = Ya yang dipakai menilai sales</p></div>
+        <div style="display:flex;gap:8px"><button class="btn btn-sm" data-add-sim>Tambah kolom</button>${SAVE_BTN}</div></div>
       <div class="card-body" id="simList"></div>
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>Bobot KPI</h3><p class="sub">Total harus 100%</p></div>
+      <div class="card-head"><div><h3>Bobot KPI</h3><p class="sub">Total harus 100%</p></div>${SAVE_BTN}</div>
       <div class="card-body"><div class="grid grid-3">
         ${numf('weights.kualitas', 'Kualitas (%)', s.weights.kualitas)}
         ${numf('weights.produktivitas', 'Produktivitas (%)', s.weights.produktivitas)}
@@ -789,21 +817,22 @@ function viewSetting(box) {
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>Tabel skor</h3><p class="sub">Baris dibaca dari nilai tertinggi. Nilai ≥ ambang memakai poin baris itu.</p></div>
+      <div class="card-head"><div><h3>Tabel skor</h3>
+        <p class="sub">Baris dibaca dari nilai tertinggi. Nilai ≥ ambang memakai poin baris itu.</p></div>${SAVE_BTN}</div>
       <div class="card-body"><div class="set-cols">
         ${bandBlock('kualitasBands', 'Kualitas', 'Ambang nilai')}
         ${bandBlock('produktivitasBands', 'Produktivitas', 'Ambang jam')}
-        ${bandBlock('salesBands', 'Sales', 'Ambang persen')}
+        ${bandBlock('salesBands', 'Sales', `${escapeHtml(sim.label)} (Rp)`)}
       </div></div>
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>Warna status KPI</h3><p class="sub">Menentukan surat apa yang terbit otomatis</p></div>
+      <div class="card-head"><div><h3>Warna status KPI</h3><p class="sub">Menentukan surat apa yang terbit otomatis</p></div>${SAVE_BTN}</div>
       <div class="card-body" id="colorList"></div>
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>Aturan surat</h3></div>
+      <div class="card-head"><h3>Aturan surat</h3>${SAVE_BTN}</div>
       <div class="card-body"><div class="grid grid-4">
         ${numf('spRules.teguranToSp1', 'Jumlah teguran menjadi SP 1', s.spRules.teguranToSp1)}
         ${numf('spRules.validityMonths', 'Masa berlaku surat (bulan)', s.spRules.validityMonths)}
@@ -818,7 +847,7 @@ function viewSetting(box) {
     <div class="card">
       <div class="card-head"><div><h3>Naskah surat</h3>
         <p class="sub">Placeholder: {{nama}} {{jabatan}} {{periode}} {{kpi}} {{alasan}} {{nomor}} {{tanggal}} {{berlakuSampai}} {{perusahaan}} {{alamat}} {{kota}} {{hrNama}} {{hrJabatan}}</p></div>
-        <button class="btn btn-sm" id="resetTpl">Pakai naskah standar internasional</button></div>
+        <div style="display:flex;gap:8px"><button class="btn btn-sm" id="resetTpl">Pakai naskah standar internasional</button>${SAVE_BTN}</div></div>
       <div class="card-body">
         ${['ST', 'SP1', 'SP2', 'SP3'].map(t => `
           <label class="fld"><span>${letterTitle(t)}</span>
@@ -827,7 +856,7 @@ function viewSetting(box) {
     </div>
 
     ${S.isLive() ? `<div class="card">
-      <div class="card-head"><h3>Pengguna</h3><p class="sub">Admin bisa input dan mengubah. Hanya lihat hanya bisa membaca dan mencetak.</p></div>
+      <div class="card-head"><h3>Pengguna</h3><p class="sub">Perubahan peran langsung tersimpan.</p></div>
       <div class="card-body" id="userList"></div>
     </div>` : ''}`;
 
@@ -846,6 +875,9 @@ function viewSetting(box) {
 
   box.addEventListener('click', async e => {
     const t = e.target;
+
+    if (t.hasAttribute('data-save')) { await persist(); return; }
+
     if (t.dataset.bandDel) {
       const [key, i] = t.dataset.bandDel.split('|');
       st.settings[key].splice(Number(i), 1); render();
@@ -854,7 +886,10 @@ function viewSetting(box) {
       st.settings[t.dataset.bandAdd].push({ min: 0, poin: 0, label: 'baris baru' }); render();
     }
     if (t.dataset.itemAdd) {
-      st.settings[t.dataset.itemAdd].push({ id: 'i' + Date.now().toString(36), label: 'Item baru', amount: 0 }); render();
+      const key = t.dataset.itemAdd;
+      const item = { id: 'i' + Date.now().toString(36), label: 'Item baru' };
+      if (key === 'gajiTypes') item.rate = 20000; else item.amount = 0;
+      st.settings[key].push(item); render();
     }
     if (t.dataset.itemDel) {
       const [key, i] = t.dataset.itemDel.split('|');
@@ -886,20 +921,27 @@ function viewSetting(box) {
     if (t.id === 'resetTpl') {
       if (confirm('Ganti keempat naskah dengan template standar internasional? Naskah yang sekarang akan hilang.')) {
         st.settings.letters = { ...DEFAULT_LETTERS };
-        render(); toast('Naskah standar dipasang. Jangan lupa simpan.');
+        render(); toast('Naskah standar dipasang. Tekan Simpan pada kartu naskah surat.');
       }
     }
   });
 
-  $('#saveSet').onclick = async () => {
-    const w = st.settings.weights;
-    if (C.num(w.kualitas) + C.num(w.produktivitas) + C.num(w.sales) !== 100) {
-      if (!confirm('Total bobot bukan 100%. Tetap simpan?')) return;
+  $('#saveSet').onclick = () => persist(true);
+
+  async function persist(checkWeights = false) {
+    if (checkWeights) {
+      const w = st.settings.weights;
+      if (C.num(w.kualitas) + C.num(w.produktivitas) + C.num(w.sales) !== 100) {
+        if (!confirm('Total bobot bukan 100%. Tetap simpan?')) return;
+      }
     }
-    await S.saveSettings(st.settings);
-    toast('Pengaturan tersimpan');
-    render();
-  };
+    try {
+      await S.saveSettings(st.settings);
+      toast('Pengaturan tersimpan');
+    } catch (err) {
+      toast('Gagal menyimpan: ' + (err.message || err));
+    }
+  }
 
   function sumWeights() {
     const w = st.settings.weights;
@@ -929,7 +971,7 @@ function viewSetting(box) {
   function renderSims() {
     $('#simList').innerHTML = `
       <div class="band-head" style="grid-template-columns:2fr 1fr 1.2fr 1fr 1fr auto">
-        <span>Judul kolom</span><span>Cancel (%)</span><span>Basis hitung</span><span>Kurangi gaji+bonus</span><span>Dasar sales %</span><span></span>
+        <span>Judul kolom</span><span>Cancel (%)</span><span>Basis hitung</span><span>Kurangi gaji+bonus</span><span>Dasar sales</span><span></span>
       </div>
       ${st.settings.simulations.map((x, i) => `
         <div class="band-row" style="grid-template-columns:2fr 1fr 1.2fr 1fr 1fr auto">
@@ -950,8 +992,7 @@ function viewSetting(box) {
           <button class="btn btn-sm btn-danger" data-sim-del="${i}">Hapus</button>
         </div>`).join('')}`;
 
-    $('#simList').addEventListener('change', e => {
-      if (e.target.dataset.simDel != null && e.target.tagName === 'BUTTON') return;
+    $('#simList').addEventListener('input', e => {
       const d = e.target.dataset.sim;
       if (!d) return;
       const [i, f] = d.split('|');
@@ -989,7 +1030,7 @@ function viewSetting(box) {
           <button class="btn btn-sm btn-danger" data-col-del="${i}">Hapus</button>
         </div>`).join('')}`;
 
-    $('#colorList').addEventListener('change', e => {
+    $('#colorList').addEventListener('input', e => {
       const d = e.target.dataset.col; if (!d) return;
       const [i, f] = d.split('|');
       st.settings.kpiColorBands[Number(i)][f] = f === 'min' ? C.num(e.target.value) : e.target.value;
@@ -1026,16 +1067,16 @@ const txt = (path, label, val) =>
 const numf = (path, label, val) =>
   `<label class="fld"><span>${label}</span><input type="number" data-path="${path}" value="${C.num(val)}"></label>`;
 
-function listCard(key, title, sub) {
+function listCard(key, title, sub, field, fieldLabel) {
   const items = st.settings[key];
   return `<div class="card">
     <div class="card-head"><div><h3>${title}</h3><p class="sub">${sub}</p></div>
-      <button class="btn btn-sm" data-item-add="${key}">Tambah</button></div>
+      <div style="display:flex;gap:8px"><button class="btn btn-sm" data-item-add="${key}">Tambah</button>${SAVE_BTN}</div></div>
     <div class="card-body">
-      <div class="band-head" style="grid-template-columns:2fr 1fr auto"><span>Nama</span><span>Nominal (Rp)</span><span></span></div>
+      <div class="band-head" style="grid-template-columns:2fr 1fr auto"><span>Nama</span><span>${fieldLabel}</span><span></span></div>
       ${items.map((x, i) => `<div class="band-row" style="grid-template-columns:2fr 1fr auto">
         <input value="${escapeHtml(x.label)}" data-band="${key}|${i}|label">
-        <input type="number" value="${C.num(x.amount)}" data-band="${key}|${i}|amount">
+        <input type="number" value="${C.num(x[field])}" data-band="${key}|${i}|${field}">
         <button class="btn btn-sm btn-danger" data-item-del="${key}|${i}">Hapus</button>
       </div>`).join('')}
     </div></div>`;
@@ -1071,7 +1112,7 @@ function openModal(title, html, actions = []) {
   $('#modalTitle').textContent = title;
   $('#modalBody').innerHTML = html;
   $('#modalFoot').innerHTML = '';
-  actions.forEach((a, i) => {
+  actions.forEach(a => {
     const b = document.createElement('button');
     b.className = 'btn ' + (a.primary ? 'btn-primary' : '');
     b.textContent = a.label;
