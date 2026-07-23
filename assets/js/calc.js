@@ -3,7 +3,7 @@
 //  Semua angka di sini bisa diubah lewat menu Setting.
 // ============================================================
 
-export const SCHEMA = 3;
+export const SCHEMA = 4;
 
 export const DEFAULT_SETTINGS = {
   schema: SCHEMA,
@@ -31,13 +31,17 @@ export const DEFAULT_SETTINGS = {
   ],
 
   // Kolom simulasi cancel order.
-  //  basis      : 'profit' = hitung dari profit bersih, 'komisi' = hitung dari komisi
-  //  deductGaji : true = kurangi lagi dengan (gaji + bonus)
-  //  isSalesBase: kolom ini yang dipakai sebagai nilai sales di penilaian KPI
+  //  basis      : 'profit' = hitung dari net income, 'komisi' = hitung dari komisi
+  //  deductGaji : true = kurangi lagi dengan (gaji + Insentif)
+  //  Kolom ini hanya tampilan pada tabel harian. Penilaian sales memakai achievement.
   simulations: [
-    { id: 's50', label: 'Simulasi 50% cancel order', cancelPct: 50, basis: 'profit', deductGaji: false, isSalesBase: true },
-    { id: 's85', label: 'Simulasi 85% cancel order', cancelPct: 85, basis: 'komisi', deductGaji: false, isSalesBase: false }
+    { id: 's50', label: 'Simulasi 50% cancel order', cancelPct: 50, basis: 'profit', deductGaji: false },
+    { id: 's85', label: 'Simulasi 85% cancel order', cancelPct: 85, basis: 'komisi', deductGaji: false }
   ],
+
+  // Achievement: patokan KPI sales.
+  //   achievement = komisi × (100% − potongan) − (gaji + Insentif)
+  achievement: { label: 'Achievement', cancelPct: 50 },
 
   // Bobot KPI (total harus 100)
   weights: { kualitas: 40, produktivitas: 10, sales: 50 },
@@ -63,7 +67,7 @@ export const DEFAULT_SETTINGS = {
     { min: 0, poin: 0, label: 'di bawah 10 jam' }
   ],
 
-  // AMBANG DALAM RUPIAH, dibaca dari akumulasi kolom simulasi acuan satu bulan.
+  // AMBANG DALAM RUPIAH, dibaca dari akumulasi ACHIEVEMENT satu bulan.
   // Angka di bawah hanya nilai awal. Sesuaikan dengan target bisnismu.
   salesBands: [
     { min: 4000000, poin: 100, label: 'Rp4.000.000 ke atas' },
@@ -126,11 +130,27 @@ export function migrateSettings(s) {
     rate: g.rate != null ? num(g.rate) : 20000
   }));
 
-  // Tabel sales: ambang persen tidak lagi berlaku, ganti ke ambang rupiah.
-  out.salesBands = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.salesBands));
+  // Tabel sales versi lama memakai ambang persen. Ganti ke ambang rupiah.
+  if (num(out.schema) < 3) {
+    out.salesBands = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.salesBands));
+  }
+
+  // Achievement menggantikan kolom simulasi sebagai dasar penilaian sales.
+  if (!out.achievement) {
+    out.achievement = { ...DEFAULT_SETTINGS.achievement };
+  }
 
   out.schema = SCHEMA;
   return out;
+}
+
+export function achLabel(settings) {
+  return (settings.achievement || {}).label || 'Achievement';
+}
+
+export function achCut(settings) {
+  const v = (settings.achievement || {}).cancelPct;
+  return v == null ? 50 : num(v);
 }
 
 // Tarif per jam yang berlaku untuk satu baris.
@@ -165,21 +185,18 @@ export function computeRow(row, settings) {
     sims[s.id] = v;
   }
 
-  const salesSim = salesSimOf(settings);
-  const salesValue = salesSim ? sims[salesSim.id] : 0;
+  // Achievement = komisi setelah potongan, dikurangi gaji + Insentif.
+  const achievement = komisi * (1 - achCut(settings) / 100) - gajiBonus;
 
   return {
     ...row,
-    jam, rate, gaji, bonus, gajiBonus, profitBersih, sims, salesValue,
+    jam, rate, gaji, bonus, gajiBonus, profitBersih, sims, achievement,
+    salesValue: achievement,
     kualitasPoin: row.kualitas === '' || row.kualitas == null
       ? null
       : bandPoin(settings.kualitasBands, row.kualitas),
-    salesPoin: bandPoin(settings.salesBands, salesValue)
+    salesPoin: bandPoin(settings.salesBands, achievement)
   };
-}
-
-export function salesSimOf(settings) {
-  return (settings.simulations || []).find(s => s.isSalesBase) || (settings.simulations || [])[0];
 }
 
 // ---------- rekap bulanan / kumulatif ----------
@@ -191,7 +208,7 @@ export function computePeriod(rows, settings) {
   const totals = {
     hari: calc.length,
     jam: 0, komisi: 0, gaji: 0, bonus: 0,
-    gajiBonus: 0, profitBersih: 0, sims: {}
+    gajiBonus: 0, profitBersih: 0, achievement: 0, sims: {}
   };
   for (const s of settings.simulations) totals.sims[s.id] = 0;
 
@@ -202,11 +219,11 @@ export function computePeriod(rows, settings) {
     totals.bonus += r.bonus;
     totals.gajiBonus += r.gajiBonus;
     totals.profitBersih += r.profitBersih;
+    totals.achievement += r.achievement;
     for (const s of settings.simulations) totals.sims[s.id] += r.sims[s.id];
   }
 
-  const salesSim = salesSimOf(settings);
-  const salesValue = salesSim ? totals.sims[salesSim.id] : 0;
+  const salesValue = totals.achievement;
 
   const kualitasVals = calc.filter(r => r.kualitas !== '' && r.kualitas != null).map(r => num(r.kualitas));
   const kualitasAvg = kualitasVals.length
@@ -229,7 +246,7 @@ export function computePeriod(rows, settings) {
   let jamRun = 0, salesRun = 0, kualSum = 0, kualN = 0;
   const running = calc.map(r => {
     jamRun += r.jam;
-    salesRun += salesSim ? r.sims[salesSim.id] : 0;
+    salesRun += r.achievement;
     if (r.kualitas !== '' && r.kualitas != null) { kualSum += num(r.kualitas); kualN++; }
 
     const kAvg = kualN ? kualSum / kualN : null;
@@ -244,6 +261,7 @@ export function computePeriod(rows, settings) {
 
   return {
     rows: calc, running, totals, salesValue, kualitasAvg, poin, kpi,
+    achievement: totals.achievement,
     color: colorOf(kpi, settings)
   };
 }
