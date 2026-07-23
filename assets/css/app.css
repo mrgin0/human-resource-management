@@ -40,6 +40,11 @@
 }
 
 *{box-sizing:border-box}
+
+/* Atribut hidden harus mengalahkan display dari class .modal / .shell / .gate.
+   Tanpa baris ini, modal kosong ikut tampil saat halaman pertama dibuka. */
+[hidden]{display:none !important}
+
 html,body{height:100%}
 body{
   margin:0;background:var(--paper);color:var(--ink);
