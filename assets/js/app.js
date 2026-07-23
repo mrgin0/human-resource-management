@@ -25,7 +25,9 @@ const st = {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const isAdmin = () => st.role === 'admin';
-const salesSim = () => C.salesSimOf(st.settings) || { id: '', label: 'Simulasi' };
+const achLabel = () => C.achLabel(st.settings);
+const achCut = () => C.achCut(st.settings);
+const achRumus = () => `${achLabel()} = komisi × ${100 - achCut()}% − (gaji + Insentif)`;
 
 // ============================================================
 //  BOOT
@@ -300,9 +302,9 @@ function viewDashboard(box) {
     <div class="card"><div class="stats">
       ${stat('Hari live', per.totals.hari, `${C.num(per.totals.jam).toLocaleString('id-ID')} jam total`)}
       ${stat('Komisi', C.rupiah(per.totals.komisi))}
-      ${stat('Gaji + bonus', C.rupiah(per.totals.gajiBonus))}
-      ${stat('Profit bersih', C.rupiah(per.totals.profitBersih), per.totals.profitBersih < 0 ? 'Minus' : '')}
-      ${stat('Sales', C.rupiah(per.salesValue), `${per.poin.sales} poin`)}
+      ${stat('Gaji + Insentif', C.rupiah(per.totals.gajiBonus))}
+      ${stat('Net income', C.rupiah(per.totals.profitBersih), per.totals.profitBersih < 0 ? 'Minus' : '')}
+      ${stat(escapeHtml(achLabel()), C.rupiah(per.achievement), `${per.poin.sales} poin sales`)}
       ${stat('Surat aktif', aktif.length, aktif.length ? aktif.map(l => l.type).join(', ') : 'Tidak ada')}
     </div></div>
 
@@ -314,7 +316,7 @@ function viewDashboard(box) {
           <tbody>
             ${compRow('Kualitas', per.kualitasAvg == null ? 'belum diisi' : per.kualitasAvg.toFixed(0), per.poin.kualitas, w.kualitas)}
             ${compRow('Produktivitas', `${per.totals.jam} jam`, per.poin.produktivitas, w.produktivitas)}
-            ${compRow(`Sales (${escapeHtml(salesSim().label)})`, C.rupiah(per.salesValue), per.poin.sales, w.sales)}
+            ${compRow(`Sales (${escapeHtml(achLabel())})`, C.rupiah(per.achievement), per.poin.sales, w.sales)}
           </tbody>
           <tfoot><tr><td class="lbl" colspan="4">KPI bulan ini</td><td class="num">${per.kpi.toFixed(1)}</td></tr></tfoot>
         </table></div>
@@ -350,7 +352,7 @@ function viewDashboard(box) {
 function hostTabs() {
   return `<div class="card">
     <div class="card-head">
-      <div><h3>Jumlah Team = ${st.hosts.length}</h3>
+      <div><h3>Jumlah team = ${st.hosts.length}</h3>
       <p class="sub">Pilih host untuk melihat ringkasannya</p></div>
     </div>
     <div class="host-tabs">
@@ -384,7 +386,7 @@ function meterCard(per, gap) {
   } else {
     note = `Kurang <b>${gap.kurang.toFixed(1)} poin</b> lagi menuju 100.` +
       (gap.salesTarget != null
-        ? ` Butuh ${escapeHtml(salesSim().label)} kumulatif menyentuh <b>${C.rupiah(gap.salesTarget)}</b>, kurang <b>${C.rupiah(gap.kurangRupiah)}</b> lagi dari ${C.rupiah(per.salesValue)}.`
+        ? ` Butuh ${escapeHtml(achLabel())} kumulatif menyentuh <b>${C.rupiah(gap.salesTarget)}</b>, kurang <b>${C.rupiah(gap.kurangRupiah)}</b> lagi dari ${C.rupiah(per.achievement)}.`
         : '');
   }
 
@@ -428,7 +430,8 @@ function viewHarian(box) {
     <tr>
       <th class="num">No</th><th>Tanggal</th><th class="num">Live/jam</th>
       <th class="num">Tarif/jam</th><th class="num">Komisi</th><th class="num">Gaji</th><th class="num">Bonus</th>
-      <th class="num">Gaji + bonus</th><th class="num">Profit bersih</th>
+      <th class="num">Gaji + Insentif</th><th class="num">Net income</th>
+      <th class="num">${escapeHtml(achLabel())}</th>
       ${sims.map(s => `<th class="num">${escapeHtml(s.label)}</th>`).join('')}
       <th></th>
     </tr>`;
@@ -447,6 +450,7 @@ function viewHarian(box) {
       <td class="num">${C.rupiah(r.bonus)}</td>
       <td class="num">${C.rupiah(r.gajiBonus)}</td>
       <td class="num ${r.profitBersih < 0 ? 'neg' : ''}">${C.rupiah(r.profitBersih)}</td>
+      <td class="num ${r.achievement < 0 ? 'neg' : ''}"><b>${C.rupiah(r.achievement)}</b></td>
       ${sims.map(s => `<td class="num ${r.sims[s.id] < 0 ? 'neg' : ''}">${C.rupiah(r.sims[s.id])}</td>`).join('')}
       <td>${isAdmin() ? `<div class="rowact">
         <button class="btn btn-sm" data-edit="${r.id}">Ubah</button>
@@ -464,14 +468,16 @@ function viewHarian(box) {
       <td class="num">${C.rupiah(per.totals.bonus)}</td>
       <td class="num">${C.rupiah(per.totals.gajiBonus)}</td>
       <td class="num">${C.rupiah(per.totals.profitBersih)}</td>
+      <td class="num">${C.rupiah(per.totals.achievement)}</td>
       ${sims.map(s => `<td class="num">${C.rupiah(per.totals.sims[s.id])}</td>`).join('')}
       <td></td>
     </tr>`;
 
   box.innerHTML = `
-    <div class="note"><b>Cara hitung.</b> Gaji = tarif per jam × jam live. Gaji + bonus dan profit bersih terisi otomatis.
-    Kolom simulasi mengikuti aturan di Setting: saat ini
-    ${sims.map(s => `<em>${escapeHtml(s.label)}</em> = ${s.basis === 'komisi' ? 'komisi' : 'profit bersih'} × ${(100 - C.num(s.cancelPct))}%${s.deductGaji ? ' − (gaji + bonus)' : ''}`).join('; ')}.</div>
+    <div class="note"><b>Cara hitung.</b> Gaji = tarif per jam × jam live. Gaji + Insentif dan net income terisi otomatis.
+    <b>${escapeHtml(achRumus())}</b> — kolom inilah yang dinilai pada KPI sales.
+    Kolom simulasi hanya tampilan pembanding, mengikuti aturan di Setting: saat ini
+    ${sims.map(s => `<em>${escapeHtml(s.label)}</em> = ${s.basis === 'komisi' ? 'komisi' : 'net income'} × ${(100 - C.num(s.cancelPct))}%${s.deductGaji ? ' − (gaji + Insentif)' : ''}`).join('; ')}.</div>
 
     <div class="card">
       <div class="card-head">
@@ -557,9 +563,9 @@ function rowForm(row) {
     }, st.settings);
     $('#f_preview').innerHTML =
       `<b>Hasil hitung.</b> Gaji ${C.rupiah(r.rate)} × ${r.jam} jam = ${C.rupiah(r.gaji)} · ` +
-      `Gaji + bonus ${C.rupiah(r.gajiBonus)} · Profit bersih ${C.rupiah(r.profitBersih)} · ` +
-      st.settings.simulations.map(s => `${escapeHtml(s.label)} ${C.rupiah(r.sims[s.id])}`).join(' · ') +
-      ` · Poin sales ${r.salesPoin}`;
+      `Gaji + Insentif ${C.rupiah(r.gajiBonus)} · Net income ${C.rupiah(r.profitBersih)} · ` +
+      `<b>${escapeHtml(achLabel())} ${C.rupiah(r.achievement)}</b> · ` +
+      st.settings.simulations.map(s => `${escapeHtml(s.label)} ${C.rupiah(r.sims[s.id])}`).join(' · ');
   };
   ['#f_jam', '#f_komisi', '#f_gaji', '#f_bonus'].forEach(s => $(s).addEventListener('input', live));
   live();
@@ -572,7 +578,6 @@ function viewKpi(box) {
   const per = C.computePeriod(periodRows(st.period), st.settings);
   const gap = C.gapToFull(per, st.settings);
   const w = st.settings.weights;
-  const sim = salesSim();
   const shownKpi = tail(per.running.map((r, i) => ({ r, no: i + 1 })), 'kpi');
 
   box.innerHTML = `
@@ -590,7 +595,7 @@ function viewKpi(box) {
           <th class="num">No</th><th>Tanggal</th>
           <th class="num">Kualitas</th><th class="num">Poin</th>
           <th class="num">Jam hari ini</th><th class="num">Jam kumulatif</th><th class="num">Poin</th>
-          <th class="num">${escapeHtml(sim.label)} kumulatif</th><th class="num">Poin</th>
+          <th class="num">${escapeHtml(achLabel())} hari ini</th><th class="num">${escapeHtml(achLabel())} kumulatif</th><th class="num">Poin</th>
           <th class="num">KPI kumulatif</th><th>Status</th>
         </tr></thead>
         <tbody>${shownKpi.map(({ r, no }) => {
@@ -605,6 +610,7 @@ function viewKpi(box) {
             <td class="num">${r.jam}</td>
             <td class="num">${r.jamKumulatif}</td>
             <td class="num">${r.poinKumulatif.produktivitas}</td>
+            <td class="num ${r.achievement < 0 ? 'neg' : ''}">${C.rupiah(r.achievement)}</td>
             <td class="num ${r.salesKumulatif < 0 ? 'neg' : ''}">${C.rupiah(r.salesKumulatif)}</td>
             <td class="num">${r.poinKumulatif.sales}</td>
             <td class="num"><b>${r.kpiKumulatif.toFixed(1)}</b></td>
@@ -622,7 +628,7 @@ function viewKpi(box) {
           <tbody>
             ${compRow('Kualitas (rata-rata)', per.kualitasAvg == null ? 'belum diisi' : per.kualitasAvg.toFixed(1), per.poin.kualitas, w.kualitas)}
             ${compRow('Produktivitas', `${per.totals.jam} jam`, per.poin.produktivitas, w.produktivitas)}
-            ${compRow('Sales', C.rupiah(per.salesValue), per.poin.sales, w.sales)}
+            ${compRow(`Sales (${escapeHtml(achLabel())})`, C.rupiah(per.achievement), per.poin.sales, w.sales)}
           </tbody>
           <tfoot><tr><td class="lbl" colspan="4">Total KPI</td><td class="num">${per.kpi.toFixed(1)}</td></tr></tfoot>
         </table></div>
@@ -632,15 +638,19 @@ function viewKpi(box) {
         <div class="card-head"><h3>Cara sales dinilai</h3></div>
         <div class="card-body">
           <p style="margin-top:0;font-size:13px;color:var(--ink-2)">
-            Poin sales dibaca langsung dari akumulasi <b>${escapeHtml(sim.label)}</b> satu bulan,
-            dicocokkan ke tabel skor sales di Setting. Tidak lagi memakai persentase.
+            <b>${escapeHtml(achRumus())}</b><br>
+            Poin sales dibaca dari akumulasi ${escapeHtml(achLabel())} satu bulan,
+            dicocokkan ke tabel skor sales di Setting.
           </p>
           <div class="tbl-scroll"><table class="tbl">
             <tbody>
-              <tr><td>${escapeHtml(sim.label)} kumulatif</td><td class="num"><b>${C.rupiah(per.salesValue)}</b></td></tr>
+              <tr><td>Komisi sebulan</td><td class="num">${C.rupiah(per.totals.komisi)}</td></tr>
+              <tr><td>Komisi setelah potongan ${achCut()}%</td><td class="num">${C.rupiah(per.totals.komisi * (1 - achCut() / 100))}</td></tr>
+              <tr><td>Dikurangi gaji + Insentif</td><td class="num">− ${C.rupiah(per.totals.gajiBonus)}</td></tr>
+              <tr><td><b>${escapeHtml(achLabel())} kumulatif</b></td><td class="num"><b>${C.rupiah(per.achievement)}</b></td></tr>
               <tr><td>Poin sales</td><td class="num"><b>${per.poin.sales}</b></td></tr>
               <tr><td>Ambang poin berikutnya</td><td class="num">${(() => {
-                const next = [...st.settings.salesBands].sort((a, b) => a.min - b.min).find(bd => bd.min > per.salesValue);
+                const next = [...st.settings.salesBands].sort((a, b) => a.min - b.min).find(bd => bd.min > per.achievement);
                 return next ? `${C.rupiah(next.min)} → ${next.poin} poin` : 'sudah tertinggi';
               })()}</td></tr>
             </tbody>
@@ -868,8 +878,8 @@ function riwayatTable(baris, semua, letters, count, spList) {
   return `<div class="tbl-scroll"><table class="tbl freeze-1">
     <thead><tr>
       <th>Bulan</th><th class="num">Hari</th><th class="num">Jam</th>
-      <th class="num">Kualitas</th><th class="num">Sales</th><th class="num">KPI</th>
-      <th>Status</th><th class="num">Surat teguran</th><th class="num">Surat peringatan</th><th>Rincian SP</th><th class="num">Profit bersih</th>
+      <th class="num">Kualitas</th><th class="num">Achievement</th><th class="num">KPI</th>
+      <th>Status</th><th class="num">Surat teguran</th><th class="num">Surat peringatan</th><th>Rincian SP</th><th class="num">Net income</th>
     </tr></thead>
     <tbody>${baris.map(m => `<tr>
       <td>${C.monthLabel(m.period)}</td>
@@ -908,7 +918,6 @@ const SAVE_BTN = '<button class="btn btn-sm btn-primary" data-save>Simpan</butto
 function viewSetting(box) {
   if (!isAdmin()) { box.innerHTML = `<div class="empty"><b>Akses terbatas</b>Menu ini hanya untuk admin.</div>`; return; }
   const s = st.settings;
-  const sim = salesSim();
 
   $('#headActions').innerHTML = `<button class="btn btn-primary" id="saveSet">Simpan semua perubahan</button>`;
 
@@ -939,8 +948,20 @@ function viewSetting(box) {
     </div>
 
     <div class="card">
+      <div class="card-head"><div><h3>Achievement</h3>
+        <p class="sub">Patokan penilaian KPI sales</p></div>${SAVE_BTN}</div>
+      <div class="card-body">
+        <div class="grid grid-2">
+          ${txt('achievement.label', 'Nama yang ditampilkan', s.achievement.label)}
+          ${numf('achievement.cancelPct', 'Potongan komisi (%)', s.achievement.cancelPct)}
+        </div>
+        <p class="note" id="achNote" style="margin-bottom:0"></p>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-head"><div><h3>Kolom simulasi cancel order</h3>
-        <p class="sub">Kolom dengan “Dasar sales” = Ya yang dipakai menilai sales</p></div>
+        <p class="sub">Hanya kolom tampilan pada tabel harian, tidak dipakai menilai sales</p></div>
         <div style="display:flex;gap:8px"><button class="btn btn-sm" data-add-sim>Tambah kolom</button>${SAVE_BTN}</div></div>
       <div class="card-body" id="simList"></div>
     </div>
@@ -961,7 +982,7 @@ function viewSetting(box) {
       <div class="card-body"><div class="set-cols">
         ${bandBlock('kualitasBands', 'Kualitas', 'Ambang nilai')}
         ${bandBlock('produktivitasBands', 'Produktivitas', 'Ambang jam')}
-        ${bandBlock('salesBands', 'Sales', `${escapeHtml(sim.label)} (Rp)`)}
+        ${bandBlock('salesBands', 'Sales', `${escapeHtml(achLabel())} (Rp)`)}
       </div></div>
     </div>
 
@@ -1001,11 +1022,14 @@ function viewSetting(box) {
       <div class="card-body" id="userList"></div>
     </div>` : ''}`;
 
-  renderHosts(); renderSims(); renderColors(); renderUsers(); sumWeights();
+  renderHosts(); renderSims(); renderColors(); renderUsers(); sumWeights(); achPreview();
 
   box.addEventListener('input', e => {
     const p = e.target.dataset.path;
-    if (p) { setPath(st.settings, p, e.target.type === 'number' ? C.num(e.target.value) : e.target.value); sumWeights(); }
+    if (p) {
+      setPath(st.settings, p, e.target.type === 'number' ? C.num(e.target.value) : e.target.value);
+      sumWeights(); achPreview();
+    }
     const b = e.target.dataset.band;
     if (b) {
       const [key, i, field] = b.split('|');
@@ -1039,7 +1063,7 @@ function viewSetting(box) {
     if (t.hasAttribute('data-add-sim')) {
       st.settings.simulations.push({
         id: 's' + Date.now().toString(36), label: 'Simulasi baru',
-        cancelPct: 50, basis: 'profit', deductGaji: false, isSalesBase: false
+        cancelPct: 50, basis: 'profit', deductGaji: false
       });
       render();
     }
@@ -1085,6 +1109,15 @@ function viewSetting(box) {
     }
   }
 
+  function achPreview() {
+    const el = $('#achNote');
+    if (!el) return;
+    el.innerHTML = `<b>Rumus:</b> ${escapeHtml(achRumus())}.
+      Contoh komisi Rp350.000 dengan gaji + Insentif Rp70.000 menghasilkan
+      ${C.rupiah(350000 * (1 - achCut() / 100) - 70000)}.
+      Setelah mengubah potongan, tinjau ulang ambang di tabel skor sales.`;
+  }
+
   function sumWeights() {
     const w = st.settings.weights;
     const total = C.num(w.kualitas) + C.num(w.produktivitas) + C.num(w.sales);
@@ -1112,24 +1145,20 @@ function viewSetting(box) {
 
   function renderSims() {
     $('#simList').innerHTML = `
-      <div class="band-head" style="grid-template-columns:2fr 1fr 1.2fr 1fr 1fr auto">
-        <span>Judul kolom</span><span>Cancel (%)</span><span>Basis hitung</span><span>Kurangi gaji+bonus</span><span>Dasar sales</span><span></span>
+      <div class="band-head" style="grid-template-columns:2fr 1fr 1.2fr 1.2fr auto">
+        <span>Judul kolom</span><span>Cancel (%)</span><span>Basis hitung</span><span>Kurangi gaji+Insentif</span><span></span>
       </div>
       ${st.settings.simulations.map((x, i) => `
-        <div class="band-row" style="grid-template-columns:2fr 1fr 1.2fr 1fr 1fr auto">
+        <div class="band-row" style="grid-template-columns:2fr 1fr 1.2fr 1.2fr auto">
           <input value="${escapeHtml(x.label)}" data-sim="${i}|label" placeholder="Judul kolom">
           <input type="number" value="${x.cancelPct}" data-sim="${i}|cancelPct" placeholder="Cancel (%)">
           <select data-sim="${i}|basis">
-            <option value="profit"${x.basis === 'profit' ? ' selected' : ''}>Basis: profit bersih</option>
+            <option value="profit"${x.basis === 'profit' ? ' selected' : ''}>Basis: net income</option>
             <option value="komisi"${x.basis === 'komisi' ? ' selected' : ''}>Basis: komisi</option>
           </select>
           <select data-sim="${i}|deductGaji">
-            <option value="no"${!x.deductGaji ? ' selected' : ''}>Tanpa potong gaji+bonus</option>
-            <option value="yes"${x.deductGaji ? ' selected' : ''}>Potong gaji+bonus</option>
-          </select>
-          <select data-sim="${i}|isSalesBase">
-            <option value="no"${!x.isSalesBase ? ' selected' : ''}>Bukan dasar sales</option>
-            <option value="yes"${x.isSalesBase ? ' selected' : ''}>Dasar penilaian sales</option>
+            <option value="no"${!x.deductGaji ? ' selected' : ''}>Tanpa potong gaji+Insentif</option>
+            <option value="yes"${x.deductGaji ? ' selected' : ''}>Potong gaji+Insentif</option>
           </select>
           <button class="btn btn-sm btn-danger" data-sim-del="${i}">Hapus</button>
         </div>`).join('')}`;
@@ -1140,10 +1169,8 @@ function viewSetting(box) {
       const [i, f] = d.split('|');
       const sim = st.settings.simulations[Number(i)];
       if (f === 'cancelPct') sim[f] = C.num(e.target.value);
-      else if (f === 'deductGaji' || f === 'isSalesBase') {
-        sim[f] = e.target.value === 'yes';
-        if (f === 'isSalesBase' && sim[f]) st.settings.simulations.forEach((o, j) => { if (j !== Number(i)) o.isSalesBase = false; });
-      } else sim[f] = e.target.value;
+      else if (f === 'deductGaji') sim[f] = e.target.value === 'yes';
+      else sim[f] = e.target.value;
     });
     $('#simList').addEventListener('click', e => {
       if (e.target.dataset.simDel != null) {
