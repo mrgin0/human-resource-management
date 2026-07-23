@@ -129,7 +129,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 @media (prefers-reduced-motion:reduce){.onair .dot{animation:none}}
 
 /* ---------- kerangka ---------- */
-.shell{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+.shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
 
 .rail{
   background:var(--rail);color:var(--rail-ink);
@@ -179,7 +179,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 
 /* ---------- ruang kerja ---------- */
-.work{padding:26px 30px 60px;max-width:1500px;width:100%}
+.work{padding:26px 32px 64px;width:100%;min-width:0}
 .work-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:22px;flex-wrap:wrap}
 .work-head h2{font-size:26px}
 .head-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -221,6 +221,23 @@ button,input,select,textarea{font:inherit;color:inherit}
 .c-pink{color:var(--pink)} .c-merah{color:var(--merah)}
 .seg.on.b-hijau{background:var(--hijau)} .seg.on.b-kuning{background:var(--kuning)}
 .seg.on.b-pink{background:var(--pink)} .seg.on.b-merah{background:var(--merah)}
+
+/* ---------- tab host ---------- */
+.host-tabs{
+  display:flex;gap:6px;padding:12px 18px 14px;overflow-x:auto;
+  scrollbar-width:thin;-webkit-overflow-scrolling:touch;
+}
+.host-tab{
+  flex:0 0 auto;display:flex;flex-direction:column;gap:3px;align-items:flex-start;
+  padding:9px 14px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--card);cursor:pointer;text-align:left;min-width:118px;
+  transition:border-color .12s,background .12s;
+}
+.host-tab:hover{border-color:#B9C3D2;background:#F6F8FB}
+.host-tab strong{font-family:var(--display);font-size:13px;font-weight:600;white-space:nowrap}
+.host-tab span{font-family:var(--mono);font-size:10.5px;color:var(--mute)}
+.host-tab.is-active{border-color:var(--signal);background:var(--signal-soft);box-shadow:inset 0 -2px 0 var(--signal)}
+.host-tab.is-active span{color:var(--signal-deep)}
 
 /* ---------- statistik ---------- */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:var(--line-soft)}
@@ -303,20 +320,91 @@ table.tbl tfoot td.lbl{font-family:var(--display);letter-spacing:.08em;text-tran
 .pdf-page th,.pdf-page td{border:1px solid #555;padding:4px 6px;text-align:left}
 
 /* ---------- responsif ---------- */
+
+/* Layar sedang: rail menyempit supaya tabel dapat ruang lebih. */
+@media (max-width:1180px){
+  .shell{grid-template-columns:210px minmax(0,1fr)}
+  .work{padding:22px 20px 60px}
+  .grid-4{grid-template-columns:repeat(2,1fr)}
+}
+
+/* Tablet dan ponsel: rail pindah ke atas. */
 @media (max-width:900px){
   .shell{grid-template-columns:1fr}
-  .rail{position:static;height:auto}
-  .rail-nav{display:flex;overflow-x:auto;padding:8px}
-  .nav-item{white-space:nowrap;width:auto}
+  .rail{position:sticky;top:0;height:auto;z-index:30;border-bottom:1px solid var(--rail-3)}
+  .rail-brand{padding:12px 16px 10px}
+  .rail-picker{
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;
+    padding:10px 16px 12px;
+  }
+  .rail-picker .fld{margin-bottom:0}
+  .rail-nav{display:flex;gap:4px;overflow-x:auto;padding:8px 12px;-webkit-overflow-scrolling:touch}
+  .rail-nav::-webkit-scrollbar{display:none}
+  .nav-item{white-space:nowrap;width:auto;flex:0 0 auto;margin-bottom:0;padding:8px 12px}
   .nav-item em{display:none}
-  .work{padding:20px 16px 50px}
+  .rail-foot{padding:10px 16px}
+
+  .work{padding:18px 14px 56px}
+  .work-head h2{font-size:22px}
   .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
-  .meter-score b{font-size:40px}
+  .card{border-radius:5px}
+}
+
+/* Ponsel. */
+@media (max-width:640px){
+  .work{padding:14px 10px 52px}
+  .work-head{gap:12px;margin-bottom:16px}
+  .work-head h2{font-size:19px}
+  .head-actions{width:100%}
+  .head-actions .btn{flex:1}
+
+  .meter-wrap{padding:16px 14px 14px}
+  .meter-score b{font-size:36px}
+  .meter{height:26px}
+  .meter-top{gap:12px}
+  .card-head{padding:12px 14px}
+  .card-body{padding:14px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stat{padding:13px 14px}
+  .stat b{font-size:16px}
+
+  table.tbl{font-size:12px}
+  table.tbl th,table.tbl td{padding:8px 10px}
+
+  /* Baris pengaturan menumpuk, label kolom disembunyikan karena
+     tiap input sudah diberi placeholder sendiri. */
+  .band-head{display:none !important}
+  .band-row{
+    grid-template-columns:1fr !important;gap:6px;
+    padding:12px;margin-bottom:10px;
+    border:1px solid var(--line-soft);border-radius:var(--r);background:#FAFBFD;
+  }
+  .band-row .btn{justify-self:end}
+
+  .modal{padding:0;align-items:flex-end}
+  .modal-card{max-height:94vh;width:100%;border-radius:8px 8px 0 0}
+  .modal-body{padding:16px}
+  .modal-foot{padding:12px 16px}
+  .modal-foot .btn{flex:1}
+
+  .gate{padding:16px}
+  .gate-card{padding:24px 20px}
+  .gate-actions{flex-direction:column;align-items:stretch}
+
+  .host-tab{min-width:104px;padding:8px 12px}
+  .toast{left:12px;right:12px;bottom:14px;transform:none;text-align:center}
+}
+
+/* Perangkat sentuh: sasaran klik diperbesar. */
+@media (hover:none){
+  .btn{padding:10px 15px}
+  .btn-sm{padding:7px 11px}
+  .fld input,.fld select{padding:10px}
 }
 
 /* ---------- cetak ---------- */
 @media print{
-  .rail,.work-head,.head-actions,.modal,.toast,.card-head .btn{display:none !important}
+  .rail,.work-head,.head-actions,.modal,.toast,.card-head .btn,.host-tabs{display:none !important}
   body{background:#fff}
   .shell{display:block}
   .work{padding:0;max-width:none}
