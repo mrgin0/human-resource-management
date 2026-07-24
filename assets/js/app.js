@@ -36,8 +36,8 @@ const achRumus = () => `${achLabel()} = komisi × ${100 - achCut()}% − (gaji +
   await initFirebase();
 
   $('#gateNote').textContent = IS_CONFIGURED
-    ? 'Akun pertama yang terdaftar perlu dijadikan admin lewat Firebase Console atau daftar BOOTSTRAP_ADMIN_EMAILS di config.js.'
-    : 'Firebase belum diisi di assets/js/config.js. Aplikasi berjalan dalam mode demo: kamu bisa mencoba semua fitur, tapi data hilang saat halaman dimuat ulang.';
+    ? ''
+    : 'Firebase belum diisi Aplikasi berjalan dalam mode demo: kamu bisa mencoba semua fitur, tapi data hilang saat halaman dimuat ulang.';
 
   if (!IS_CONFIGURED) {
     $('#loginForm').innerHTML =
