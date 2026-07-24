@@ -674,7 +674,19 @@ function viewKpi(box) {
   });
 }
 
-const pillClass = key => ({ hijau: 'ok', kuning: 'warn', pink: 'st', merah: 'sp' }[key] || 'dead');
+// Daftar warna status yang bisa dipilih. Menambah entri di sini otomatis
+// menambah pilihannya di Setting, warna meter, dan pil status.
+const WARNA = [
+  { key: 'hijau', nama: 'Hijau' },
+  { key: 'biru', nama: 'Biru' },
+  { key: 'ungu', nama: 'Ungu' },
+  { key: 'kuning', nama: 'Kuning' },
+  { key: 'oren', nama: 'Oren' },
+  { key: 'pink', nama: 'Pink' },
+  { key: 'merah', nama: 'Merah' }
+];
+
+const pillClass = key => (WARNA.some(w => w.key === key) ? `c-${key}` : 'dead');
 
 // ============================================================
 //  04 — SURAT ST & SP
@@ -987,7 +999,9 @@ function viewSetting(box) {
     </div>
 
     <div class="card">
-      <div class="card-head"><div><h3>Warna status KPI</h3><p class="sub">Menentukan surat apa yang terbit otomatis</p></div>${SAVE_BTN}</div>
+      <div class="card-head"><div><h3>Warna status KPI</h3>
+        <p class="sub">Menentukan surat apa yang terbit otomatis. Baris dibaca dari KPI tertinggi ke terendah.</p></div>
+        <div style="display:flex;gap:8px"><button class="btn btn-sm" data-add-color>Tambah baris</button>${SAVE_BTN}</div></div>
       <div class="card-body" id="colorList"></div>
     </div>
 
@@ -1059,6 +1073,12 @@ function viewSetting(box) {
     if (t.dataset.itemDel) {
       const [key, i] = t.dataset.itemDel.split('|');
       st.settings[key].splice(Number(i), 1); render();
+    }
+    if (t.hasAttribute('data-add-color')) {
+      st.settings.kpiColorBands.push({ min: 0, key: 'biru', label: 'Biru - baik', action: 'none' });
+      // Urutkan ulang supaya baris baru langsung berada di posisi yang benar.
+      st.settings.kpiColorBands.sort((a, b) => C.num(b.min) - C.num(a.min));
+      render();
     }
     if (t.hasAttribute('data-add-sim')) {
       st.settings.simulations.push({
@@ -1181,15 +1201,18 @@ function viewSetting(box) {
 
   function renderColors() {
     $('#colorList').innerHTML = `
-      <div class="band-head" style="grid-template-columns:1fr 1fr 2fr 1.2fr auto">
+      <div class="band-head" style="grid-template-columns:1fr 1.2fr 2fr 1.2fr auto">
         <span>KPI minimum</span><span>Kode warna</span><span>Label tampil</span><span>Tindakan</span><span></span>
       </div>
       ${st.settings.kpiColorBands.map((c, i) => `
-        <div class="band-row" style="grid-template-columns:1fr 1fr 2fr 1.2fr auto">
+        <div class="band-row" style="grid-template-columns:1fr 1.2fr 2fr 1.2fr auto">
           <input type="number" value="${c.min}" data-col="${i}|min" placeholder="KPI minimum">
-          <select data-col="${i}|key">
-            ${['hijau', 'kuning', 'pink', 'merah'].map(k => `<option value="${k}"${k === c.key ? ' selected' : ''}>Warna ${k}</option>`).join('')}
-          </select>
+          <span style="display:flex;align-items:center;gap:6px">
+            <i class="swatch c-${escapeHtml(c.key)}"></i>
+            <select data-col="${i}|key" style="flex:1;min-width:0">
+              ${WARNA.map(w => `<option value="${w.key}"${w.key === c.key ? ' selected' : ''}>${w.nama}</option>`).join('')}
+            </select>
+          </span>
           <input value="${escapeHtml(c.label)}" data-col="${i}|label" placeholder="Label tampil">
           <select data-col="${i}|action">
             <option value="none"${c.action === 'none' ? ' selected' : ''}>Tidak ada surat</option>
@@ -1203,6 +1226,10 @@ function viewSetting(box) {
       const d = e.target.dataset.col; if (!d) return;
       const [i, f] = d.split('|');
       st.settings.kpiColorBands[Number(i)][f] = f === 'min' ? C.num(e.target.value) : e.target.value;
+      if (f === 'key') {
+        const sw = e.target.closest('span')?.querySelector('.swatch');
+        if (sw) sw.className = `swatch c-${e.target.value}`;
+      }
     });
     $('#colorList').addEventListener('click', e => {
       if (e.target.dataset.colDel != null) { st.settings.kpiColorBands.splice(Number(e.target.dataset.colDel), 1); render(); }
