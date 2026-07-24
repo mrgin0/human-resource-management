@@ -26,7 +26,10 @@
   --signal-soft:#FFF3DA;
 
   --hijau:#12866B;
+  --biru:#1666C8;
+  --ungu:#7040C9;
   --kuning:#C08A00;
+  --oren:#C25A08;
   --pink:#D6488D;
   --merah:#D42D3C;
   --onair:#E5484D;
@@ -231,10 +234,21 @@ button,input,select,textarea{font:inherit;color:inherit}
 .meter-note{margin:14px 0 0;font-size:13px;color:var(--ink-2)}
 .meter-note b{font-family:var(--mono)}
 
-.c-hijau{color:var(--hijau)} .c-kuning{color:var(--kuning)}
-.c-pink{color:var(--pink)} .c-merah{color:var(--merah)}
-.seg.on.b-hijau{background:var(--hijau)} .seg.on.b-kuning{background:var(--kuning)}
-.seg.on.b-pink{background:var(--pink)} .seg.on.b-merah{background:var(--merah)}
+.c-hijau{color:var(--hijau)} .c-biru{color:var(--biru)}
+.c-ungu{color:var(--ungu)}   .c-kuning{color:var(--kuning)}
+.c-oren{color:var(--oren)}   .c-pink{color:var(--pink)}
+.c-merah{color:var(--merah)}
+
+.seg.on.b-hijau{background:var(--hijau)} .seg.on.b-biru{background:var(--biru)}
+.seg.on.b-ungu{background:var(--ungu)}   .seg.on.b-kuning{background:var(--kuning)}
+.seg.on.b-oren{background:var(--oren)}   .seg.on.b-pink{background:var(--pink)}
+.seg.on.b-merah{background:var(--merah)}
+
+/* Titik warna kecil di daftar pengaturan. */
+.swatch{
+  display:inline-block;width:11px;height:11px;border-radius:2px;
+  background:currentColor;vertical-align:-1px;margin-right:6px;
+}
 
 /* ---------- tab host ---------- */
 .host-tabs{
