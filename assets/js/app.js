@@ -352,7 +352,7 @@ function viewDashboard(box) {
 function hostTabs() {
   return `<div class="card">
     <div class="card-head">
-      <div><h3>Jumlah team = ${st.hosts.length}</h3>
+      <div><h3>Total Personel = ${st.hosts.length}</h3>
       <p class="sub">Pilih host untuk melihat ringkasannya</p></div>
     </div>
     <div class="host-tabs">
